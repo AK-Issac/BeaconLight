@@ -24,6 +24,9 @@ import {
 /** Per-tab spoofing state (in-memory, lost on SW restart — acceptable for demo) */
 const tabSpoofState: TabSpoofState = {};
 
+/** Master extension active state */
+let isMasterActive = true;
+
 /** Connected popup ports for live updates */
 const connectedPorts: Map<number, chrome.runtime.Port> = new Map();
 
@@ -92,7 +95,8 @@ function classifyHeuristic(url: string, bodyPreview: string | null): Category {
 function classifyRequest(
   url: string,
   domain: string,
-  bodyPreview: string | null
+  bodyPreview: string | null,
+  method: string
 ): {
   category: Category;
   severity: Severity;
@@ -113,19 +117,26 @@ function classifyRequest(
     };
   }
 
-  // Tier 2: Heuristic classification
-  const heuristicCategory = classifyHeuristic(url, bodyPreview);
-  if (heuristicCategory) {
-    return {
-      category: heuristicCategory,
-      severity: "flagged",
-      tier: 2,
-      spoofable: SPOOFABLE_CATEGORIES.has(heuristicCategory),
-      plainDescription:
-        CATEGORY_DESCRIPTIONS[heuristicCategory] ||
-        "Suspicious tracking behavior detected.",
-      isAutoBlocked: false,
-    };
+  // Reduce False Positives: Skip heuristic checks for GET requests 
+  // or standard asset requests (unless they matched Tier 1 above).
+  const isGet = method.toUpperCase() === "GET";
+  const isAsset = /\.(css|js|png|jpg|jpeg|gif|svg|woff|woff2|ico)$/i.test(url.split('?')[0]);
+  
+  if (!isGet && !isAsset) {
+    // Tier 2: Heuristic classification
+    const heuristicCategory = classifyHeuristic(url, bodyPreview);
+    if (heuristicCategory) {
+      return {
+        category: heuristicCategory,
+        severity: "flagged",
+        tier: 2,
+        spoofable: SPOOFABLE_CATEGORIES.has(heuristicCategory),
+        plainDescription:
+          CATEGORY_DESCRIPTIONS[heuristicCategory] ||
+          "Suspicious tracking behavior detected.",
+        isAutoBlocked: false,
+      };
+    }
   }
 
   // Neutral: no classification match
@@ -298,10 +309,11 @@ async function processRequest(
   bodyPreview: string | null,
   tabId: number
 ) {
+  if (!isMasterActive) return;
   if (tabId < 0) return; // Ignore requests without a valid tab
 
   const domain = extractDomain(url);
-  const classification = classifyRequest(url, domain, bodyPreview);
+  const classification = classifyRequest(url, domain, bodyPreview, method);
 
   // Check if this domain was manually blocked
   const stored = await chrome.storage.local.get("blockedDomains");
@@ -458,6 +470,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       sendResponse({ enabled: tabSpoofState[spoofStateTabId] === true });
       return true;
     }
+
+    case "GET_MASTER_ACTIVE": {
+      sendResponse({ active: isMasterActive });
+      return true;
+    }
+
+    case "SET_MASTER_ACTIVE": {
+      isMasterActive = message.payload.active;
+      chrome.storage.local.set({ masterActive: isMasterActive });
+      sendResponse({ success: true });
+      return true;
+    }
   }
 });
 
@@ -480,14 +504,26 @@ chrome.runtime.onConnect.addListener((port) => {
 // ============================================================================
 // Lifecycle: Install & Startup
 // ============================================================================
-chrome.runtime.onInstalled.addListener(() => {
+chrome.runtime.onInstalled.addListener(async () => {
   console.log("[BeaconLight] Extension installed. Applying auto-block rules...");
-  applyAutoBlockRules();
+  await applyAutoBlockRules();
+  chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch((error) => console.error(error));
+  
+  const stored = await chrome.storage.local.get("masterActive");
+  if (stored.masterActive !== undefined) {
+    isMasterActive = stored.masterActive;
+  }
 });
 
-chrome.runtime.onStartup.addListener(() => {
+chrome.runtime.onStartup.addListener(async () => {
   console.log("[BeaconLight] Browser started. Re-applying auto-block rules...");
-  applyAutoBlockRules();
+  await applyAutoBlockRules();
+  chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch((error) => console.error(error));
+
+  const stored = await chrome.storage.local.get("masterActive");
+  if (stored.masterActive !== undefined) {
+    isMasterActive = stored.masterActive;
+  }
 });
 
 // Clean up tab logs when a tab is closed
@@ -496,4 +532,27 @@ chrome.tabs.onRemoved.addListener((tabId) => {
   delete tabSpoofState[tabId];
   connectedPorts.delete(tabId);
   chrome.storage.session.remove(`tabLog_${tabId}`);
+});
+
+// ============================================================================
+// Page Navigation (Clear Logs)
+// ============================================================================
+chrome.webNavigation.onCommitted.addListener((details) => {
+  if (details.frameId === 0 && details.tabId >= 0) {
+    // Main frame navigation: clear logs for this tab
+    tabLogs.delete(details.tabId);
+    chrome.storage.session.remove(`tabLog_${details.tabId}`);
+    
+    // Notify the popup to clear its UI
+    const port = connectedPorts.get(details.tabId);
+    if (port) {
+      try {
+        port.postMessage({ type: "CLEAR_LOG", payload: { tabId: details.tabId } });
+      } catch (err) {
+        connectedPorts.delete(details.tabId);
+      }
+    }
+    
+    console.log(`[BeaconLight] Cleared logs for tab ${details.tabId} on navigation.`);
+  }
 });

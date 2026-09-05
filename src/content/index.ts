@@ -70,10 +70,16 @@ chrome.runtime.onMessage.addListener((message) => {
 });
 
 /**
- * On initialization, check if spoofing is enabled for this tab
- * and inject the page-context script accordingly.
+ * On initialization, check if the extension is master active and if spoofing is enabled
+ * for this tab, then inject the page-context script accordingly.
  */
-chrome.runtime.sendMessage({ type: "GET_SPOOF_STATE" }, (response) => {
-  const spoofEnabled = response?.enabled ?? false;
-  injectPageScript(spoofEnabled);
+chrome.runtime.sendMessage({ type: "GET_MASTER_ACTIVE" }, (masterResponse) => {
+  if (masterResponse?.active === false) {
+    return; // Do not inject if the extension is paused
+  }
+
+  chrome.runtime.sendMessage({ type: "GET_SPOOF_STATE" }, (response) => {
+    const spoofEnabled = response?.enabled ?? false;
+    injectPageScript(spoofEnabled);
+  });
 });

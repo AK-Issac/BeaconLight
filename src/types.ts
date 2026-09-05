@@ -116,6 +116,28 @@ export interface SpoofToggleMessage {
   };
 }
 
+/** Sent from popup → background to toggle master active state */
+export interface SetMasterActiveMessage {
+  type: "SET_MASTER_ACTIVE";
+  payload: {
+    active: boolean;
+  };
+}
+
+
+/** Sent from popup/content → background to check master active state */
+export interface GetMasterActiveMessage {
+  type: "GET_MASTER_ACTIVE";
+}
+
+/** Sent from background → popup to clear logs on navigation */
+export interface ClearLogMessage {
+  type: "CLEAR_LOG";
+  payload: {
+    tabId: number;
+  };
+}
+
 /** Union of all message types for type-safe message handling */
 export type BeaconLightMessage =
   | ObservedRequestMessage
@@ -126,7 +148,10 @@ export type BeaconLightMessage =
   | EnableSpoofMessage
   | DisableSpoofMessage
   | LiveUpdateMessage
-  | SpoofToggleMessage;
+  | SpoofToggleMessage
+  | SetMasterActiveMessage
+  | GetMasterActiveMessage
+  | ClearLogMessage;
 
 // ============================================================================
 // Internal State
@@ -140,4 +165,9 @@ export interface TabSpoofState {
 /** Stored blocked domains (chrome.storage.local) */
 export interface BlockedDomainsStorage {
   blockedDomains: string[];
+}
+
+/** Stored master active state (chrome.storage.local) */
+export interface MasterActiveStorage {
+  masterActive: boolean;
 }

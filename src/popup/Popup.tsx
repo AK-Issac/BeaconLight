@@ -1,11 +1,9 @@
 // ============================================================================
-// BeaconLight — Popup.tsx
-// Main React UI component for the extension popup.
-// Uses React Hooks (useState, useEffect) for state management.
-// Opens a chrome.runtime.connect port for live request log updates.
+// BeaconLight — Popup.tsx (Side Panel)
+// Main React UI component for the extension side panel.
 // ============================================================================
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import type { RequestLog, Category } from "../types";
 
 type FilterMode = "all" | "flagged" | "blocked" | "spoofed";
@@ -38,56 +36,74 @@ function formatTime(ts: number): string {
 }
 
 // ============================================================================
-// RequestCard Component
+// DomainGroup Component (Accordion)
 // ============================================================================
-function RequestCard({
-  log,
+function DomainGroup({
+  domain,
+  logs,
   onBlock,
+  onUnblock,
   onSpoof,
 }: {
-  log: RequestLog;
+  domain: string;
+  logs: RequestLog[];
   onBlock: (domain: string) => void;
+  onUnblock: (domain: string) => void;
   onSpoof: (tabId: number) => void;
 }) {
-  const severityClass = log.severity === "flagged" ? "flagged" : "neutral";
-  const blockedClass = log.isBlocked || log.isAutoBlocked ? "blocked" : "";
+  const [expanded, setExpanded] = useState(false);
+
+  const isAutoBlocked = logs.some((l) => l.isAutoBlocked);
+  const isBlocked = logs.some((l) => l.isBlocked);
+  const hasFlagged = logs.some((l) => l.severity === "flagged");
+  const isSpoofable = logs.some((l) => l.spoofable);
+  const isSpoofed = logs.some((l) => l.isSpoofed);
+
+  const severityClass = hasFlagged ? "flagged" : "neutral";
+  const blockedClass = isBlocked || isAutoBlocked ? "blocked" : "";
+
+  // Get unique categories for badges
+  const categories = Array.from(new Set(logs.map((l) => l.category).filter(Boolean))) as Category[];
 
   return (
     <div
       className={`request-card request-card--${severityClass} ${
         blockedClass ? "request-card--blocked" : ""
       }`}
-      id={`request-${log.id}`}
     >
-      <div className="request-card__top">
+      <div
+        className="request-card__top"
+        onClick={() => setExpanded(!expanded)}
+        style={{ cursor: "pointer" }}
+      >
         <div className="request-card__domain-row">
-          {log.severity === "flagged" && (
-            <span className="request-card__flag">🚩</span>
-          )}
-          <span className="request-card__domain">{log.domain}</span>
-          <span className="request-card__method">{log.method}</span>
+          {hasFlagged && <span className="request-card__flag">🚩</span>}
+          <span className="request-card__domain">{domain}</span>
+          <span className="request-card__count">({logs.length})</span>
+          <span className="request-card__expand-icon">{expanded ? "▼" : "▶"}</span>
         </div>
-        <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
-          {log.category && (
+        <div className="request-card__badges">
+          {categories.map((cat) => (
             <span
+              key={cat}
               className={`request-card__badge request-card__badge--${
-                CATEGORY_BADGE_CLASS[log.category] || "tracker"
+                CATEGORY_BADGE_CLASS[cat!] || "tracker"
               }`}
             >
-              {CATEGORY_LABELS[log.category] || log.category}
+              {CATEGORY_LABELS[cat!] || cat}
             </span>
-          )}
-          {log.isAutoBlocked && (
+          ))}
+          {isAutoBlocked && (
             <span className="request-card__badge request-card__badge--blocked">
               Auto-blocked
             </span>
           )}
-          {log.isBlocked && !log.isAutoBlocked && (
+          {isBlocked && !isAutoBlocked && (
             <span className="request-card__badge request-card__badge--blocked">
               Blocked
             </span>
           )}
-          {log.isSpoofed && (
+          {isSpoofed && (
             <span className="request-card__badge request-card__badge--spoofed">
               Spoofed
             </span>
@@ -95,40 +111,50 @@ function RequestCard({
         </div>
       </div>
 
-      <p className="request-card__description">{log.plainDescription}</p>
-
-      <div className="request-card__url" title={log.url}>
-        {log.url}
-      </div>
-
       <div
         style={{
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
+          marginTop: "8px",
         }}
       >
         <div className="request-card__actions">
-          {log.isAutoBlocked ? (
+          {isAutoBlocked ? (
             <span className="request-card__auto-blocked">
               🛡️ Auto-blocked Tracker
             </span>
           ) : (
             <>
-              {!log.isBlocked && (
+              {isBlocked ? (
+                <button
+                  className="request-card__btn request-card__btn--unblock"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onUnblock(domain);
+                  }}
+                >
+                  Unblock
+                </button>
+              ) : (
                 <button
                   className="request-card__btn request-card__btn--block"
-                  onClick={() => onBlock(log.domain)}
-                  id={`block-${log.id}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onBlock(domain);
+                  }}
                 >
                   Block
                 </button>
               )}
-              {log.spoofable && !log.isSpoofed && (
+              {isSpoofable && !isSpoofed && (
                 <button
                   className="request-card__btn request-card__btn--spoof"
-                  onClick={() => onSpoof(log.tabId)}
-                  id={`spoof-${log.id}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    // Grab tabId from the first log
+                    onSpoof(logs[0].tabId);
+                  }}
                 >
                   Spoof
                 </button>
@@ -136,28 +162,68 @@ function RequestCard({
             </>
           )}
         </div>
-        <span className="request-card__time">{formatTime(log.timestamp)}</span>
       </div>
+
+      {expanded && (
+        <div className="request-card__details">
+          {[...logs]
+            .sort((a, b) => {
+              // Flagged items to the top
+              if (a.severity === "flagged" && b.severity !== "flagged") return -1;
+              if (a.severity !== "flagged" && b.severity === "flagged") return 1;
+              return b.timestamp - a.timestamp;
+            })
+            .map((log) => (
+              <div
+                key={log.id}
+                className={`request-card__log-item ${
+                  log.severity === "flagged" ? "request-card__log-item--flagged" : ""
+                }`}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
+                  <span className="request-card__method">{log.method}</span>
+                  <span className="request-card__time">{formatTime(log.timestamp)}</span>
+                </div>
+                {log.severity === "flagged" && (
+                  <div className="request-card__culprit-alert">
+                    ⚠️ {CATEGORY_LABELS[log.category!] || "Suspicious behavior"}
+                  </div>
+                )}
+                <p className="request-card__description">{log.plainDescription}</p>
+                <div className="request-card__url" title={log.url}>
+                  {log.url}
+                </div>
+              </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
 
 // ============================================================================
-// Main Popup Component
+// Main Popup Component (Side Panel)
 // ============================================================================
 export function Popup() {
   const [requestLogs, setRequestLogs] = useState<RequestLog[]>([]);
   const [filter, setFilter] = useState<FilterMode>("all");
+  const [isMasterActive, setIsMasterActive] = useState(true);
   const [spoofEnabled, setSpoofEnabled] = useState(false);
   const [activeTabId, setActiveTabId] = useState<number | null>(null);
   const portRef = useRef<chrome.runtime.Port | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
-  // Get the active tab ID on mount
+  // Get active tab ID and master state on mount
   useEffect(() => {
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
       if (tabs[0]?.id) {
         setActiveTabId(tabs[0].id);
+      }
+    });
+
+    chrome.runtime.sendMessage({ type: "GET_MASTER_ACTIVE" }, (response) => {
+      if (response && response.active !== undefined) {
+        setIsMasterActive(response.active);
       }
     });
   }, []);
@@ -166,7 +232,6 @@ export function Popup() {
   useEffect(() => {
     if (activeTabId === null) return;
 
-    // Fetch existing logs for this tab
     chrome.runtime.sendMessage(
       { type: "GET_TAB_LOG", payload: { tabId: activeTabId } },
       (response) => {
@@ -176,7 +241,6 @@ export function Popup() {
       }
     );
 
-    // Open a named port for live updates
     const port = chrome.runtime.connect({
       name: `beaconlight-popup-${activeTabId}`,
     });
@@ -186,9 +250,12 @@ export function Popup() {
       if (message.type === "LIVE_UPDATE" && message.payload?.log) {
         setRequestLogs((prev) => {
           const updated = [...prev, message.payload.log];
-          // Keep only last 500
           return updated.length > 500 ? updated.slice(-500) : updated;
         });
+      } else if (message.type === "CLEAR_LOG") {
+        if (message.payload?.tabId === activeTabId) {
+          setRequestLogs([]);
+        }
       }
     });
 
@@ -198,19 +265,20 @@ export function Popup() {
     };
   }, [activeTabId]);
 
-  // Auto-scroll to bottom when new logs arrive
-  useEffect(() => {
-    if (listRef.current) {
-      listRef.current.scrollTop = listRef.current.scrollHeight;
-    }
-  }, [requestLogs]);
+  const handleMasterToggle = useCallback(() => {
+    const newState = !isMasterActive;
+    chrome.runtime.sendMessage(
+      { type: "SET_MASTER_ACTIVE", payload: { active: newState } },
+      () => {
+        setIsMasterActive(newState);
+      }
+    );
+  }, [isMasterActive]);
 
-  // Handle manual block action
   const handleBlock = useCallback((domain: string) => {
     chrome.runtime.sendMessage(
       { type: "BLOCK_DOMAIN", payload: { domain } },
       () => {
-        // Update local state optimistically
         setRequestLogs((prev) =>
           prev.map((log) =>
             log.domain === domain ? { ...log, isBlocked: true } : log
@@ -220,25 +288,33 @@ export function Popup() {
     );
   }, []);
 
-  // Handle spoof action
-  const handleSpoof = useCallback(
-    (tabId: number) => {
-      chrome.runtime.sendMessage(
-        { type: "ENABLE_SPOOF", payload: { tabId } },
-        () => {
-          setSpoofEnabled(true);
-          setRequestLogs((prev) =>
-            prev.map((log) =>
-              log.spoofable ? { ...log, isSpoofed: true } : log
-            )
-          );
-        }
-      );
-    },
-    []
-  );
+  const handleUnblock = useCallback((domain: string) => {
+    chrome.runtime.sendMessage(
+      { type: "UNBLOCK_DOMAIN", payload: { domain } },
+      () => {
+        setRequestLogs((prev) =>
+          prev.map((log) =>
+            log.domain === domain ? { ...log, isBlocked: false } : log
+          )
+        );
+      }
+    );
+  }, []);
 
-  // Handle global spoof toggle
+  const handleSpoof = useCallback((tabId: number) => {
+    chrome.runtime.sendMessage(
+      { type: "ENABLE_SPOOF", payload: { tabId } },
+      () => {
+        setSpoofEnabled(true);
+        setRequestLogs((prev) =>
+          prev.map((log) =>
+            log.spoofable ? { ...log, isSpoofed: true } : log
+          )
+        );
+      }
+    );
+  }, []);
+
   const handleSpoofToggle = useCallback(() => {
     if (activeTabId === null) return;
 
@@ -267,12 +343,8 @@ export function Popup() {
 
   // Compute summary stats
   const totalRequests = requestLogs.length;
-  const flaggedCount = requestLogs.filter(
-    (l) => l.severity === "flagged"
-  ).length;
-  const blockedCount = requestLogs.filter(
-    (l) => l.isBlocked || l.isAutoBlocked
-  ).length;
+  const flaggedCount = requestLogs.filter((l) => l.severity === "flagged").length;
+  const blockedCount = requestLogs.filter((l) => l.isBlocked || l.isAutoBlocked).length;
 
   // Apply filter
   const filteredLogs = requestLogs.filter((log) => {
@@ -288,13 +360,24 @@ export function Popup() {
     }
   });
 
-  // Show flagged items first, then by timestamp (newest last)
-  const sortedLogs = [...filteredLogs].sort((a, b) => {
-    // Flagged items rise to top within their time order
-    if (a.severity === "flagged" && b.severity !== "flagged") return -1;
-    if (a.severity !== "flagged" && b.severity === "flagged") return 1;
-    return a.timestamp - b.timestamp;
-  });
+  // Group by Domain
+  const groupedLogs = useMemo(() => {
+    const groups: Record<string, RequestLog[]> = {};
+    for (const log of filteredLogs) {
+      if (!groups[log.domain]) {
+        groups[log.domain] = [];
+      }
+      groups[log.domain].push(log);
+    }
+    // Sort groups: flagged domains first, then alphabetically
+    return Object.entries(groups).sort(([domainA, logsA], [domainB, logsB]) => {
+      const aFlagged = logsA.some((l) => l.severity === "flagged");
+      const bFlagged = logsB.some((l) => l.severity === "flagged");
+      if (aFlagged && !bFlagged) return -1;
+      if (!aFlagged && bFlagged) return 1;
+      return domainA.localeCompare(domainB);
+    });
+  }, [filteredLogs]);
 
   return (
     <div className="beaconlight" id="beaconlight-root">
@@ -305,9 +388,28 @@ export function Popup() {
             <div className="header__logo">B</div>
             <h1 className="header__title">BeaconLight</h1>
           </div>
-          <div className="header__spoof-toggle">
-            <span className="header__spoof-label">Spoof</span>
-            <label className="toggle" id="spoof-toggle">
+          <div className="header__toggles">
+            <div className="header__master-toggle">
+              <span className="header__toggle-label">
+                {isMasterActive ? "Active" : "Paused"}
+              </span>
+              <label className="toggle" id="master-toggle">
+                <input
+                  type="checkbox"
+                  checked={isMasterActive}
+                  onChange={handleMasterToggle}
+                />
+                <span className="toggle__slider" />
+              </label>
+            </div>
+          </div>
+        </div>
+
+        {/* Spoof Toggle - Only show if master is active */}
+        {isMasterActive && (
+          <div className="header__spoof-row">
+            <span className="header__spoof-label">Global Spoofing</span>
+            <label className="toggle toggle--small" id="spoof-toggle">
               <input
                 type="checkbox"
                 checked={spoofEnabled}
@@ -316,7 +418,8 @@ export function Popup() {
               <span className="toggle__slider" />
             </label>
           </div>
-        </div>
+        )}
+
         <div className="header__stats">
           <div className="stat-chip stat-chip--flagged">
             <span className="stat-chip__icon">🚩</span>
@@ -356,9 +459,17 @@ export function Popup() {
         )}
       </div>
 
-      {/* Request List */}
+      {/* Request List (Accordion) */}
       <div className="request-list" ref={listRef} id="request-list">
-        {sortedLogs.length === 0 ? (
+        {!isMasterActive ? (
+          <div className="request-list__empty">
+            <span className="request-list__empty-icon">⏸️</span>
+            <span className="request-list__empty-title">BeaconLight is Paused</span>
+            <span className="request-list__empty-subtitle">
+              Toggle the Active switch above to resume request observation.
+            </span>
+          </div>
+        ) : groupedLogs.length === 0 ? (
           <div className="request-list__empty">
             <span className="request-list__empty-icon">🔍</span>
             <span className="request-list__empty-title">
@@ -373,11 +484,13 @@ export function Popup() {
             </span>
           </div>
         ) : (
-          sortedLogs.map((log) => (
-            <RequestCard
-              key={log.id}
-              log={log}
+          groupedLogs.map(([domain, logs]) => (
+            <DomainGroup
+              key={domain}
+              domain={domain}
+              logs={logs}
               onBlock={handleBlock}
+              onUnblock={handleUnblock}
               onSpoof={handleSpoof}
             />
           ))
@@ -391,7 +504,9 @@ export function Popup() {
             Session: {totalRequests} requests • {flaggedCount} flagged •{" "}
             {blockedCount} blocked
           </span>
-          <span className="footer__link pulse">● Live</span>
+          <span className={`footer__link ${isMasterActive ? "pulse" : ""}`}>
+            {isMasterActive ? "● Live" : "○ Paused"}
+          </span>
         </div>
       </footer>
     </div>
