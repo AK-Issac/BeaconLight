@@ -63,12 +63,12 @@
 }
 
 body {
-  width: 400px;
-  height: 600px;
+  width: 100%;
+  min-height: 100vh;
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   background: var(--bg-primary);
   color: var(--text-primary);
-  overflow: hidden;
+  overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -482,9 +482,7 @@ body {
   font-size: 10px;
   color: var(--text-muted);
   font-family: 'SF Mono', 'Fira Code', monospace;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  word-break: break-all;
   padding: 4px 8px;
   background: rgba(0, 0, 0, 0.2);
   border-radius: var(--radius-sm);

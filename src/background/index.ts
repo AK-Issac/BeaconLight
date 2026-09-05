@@ -48,13 +48,23 @@ let nextDynamicRuleId = 10000;
 // Utility: Extract domain from URL
 // ============================================================================
 function extractDomain(url: string): string {
+  let hostname = url;
   try {
-    return new URL(url).hostname;
+    hostname = new URL(url).hostname;
   } catch {
     // Fallback for malformed URLs
     const match = url.match(/^(?:https?:\/\/)?([^/:\?#]+)/);
-    return match ? match[1] : url;
+    if (match) hostname = match[1];
   }
+
+  const parts = hostname.split('.');
+  if (parts.length <= 2) return hostname;
+  
+  const secondLevel = parts[parts.length - 2];
+  if (['co', 'com', 'org', 'net', 'edu', 'gov', 'mil', 'ac'].includes(secondLevel)) {
+    return parts.slice(-3).join('.');
+  }
+  return parts.slice(-2).join('.');
 }
 
 // ============================================================================
@@ -125,12 +135,13 @@ function classifyRequest(
     };
   }
 
-  // Reduce False Positives: Skip heuristic checks for GET requests 
-  // or standard asset requests (unless they matched Tier 1 above).
-  const isGet = method.toUpperCase() === "GET";
+  // Reduce False Positives: Skip heuristic checks for standard asset requests.
+  // Only execute heuristics on POST/PUT requests or requests containing an actual payload/body.
   const isAsset = /\.(css|js|png|jpg|jpeg|gif|svg|woff|woff2|ico)$/i.test(url.split('?')[0]);
+  const isPostOrPut = method.toUpperCase() === "POST" || method.toUpperCase() === "PUT";
+  const hasPayload = bodyPreview !== null && bodyPreview.trim().length > 0;
   
-  if (!isGet && !isAsset) {
+  if (!isAsset && (isPostOrPut || hasPayload)) {
     // Tier 2: Heuristic classification
     const heuristicCategory = classifyHeuristic(url, bodyPreview);
     if (heuristicCategory) {
@@ -312,6 +323,21 @@ async function processRequest(
   const domain = extractDomain(url);
   const classification = classifyRequest(url, domain, bodyPreview, method);
 
+  let partyContext: "1st-party" | "3rd-party" = "3rd-party";
+  try {
+    const tab = await ext.tabs.get(tabId);
+    if (tab.url) {
+      const tabDomain = extractDomain(tab.url);
+      partyContext = tabDomain === domain ? "1st-party" : "3rd-party";
+    }
+  } catch {
+    // Tab might be gone
+  }
+
+  if (partyContext === "1st-party" && classification.severity === "flagged") {
+    classification.severity = "neutral";
+  }
+
   // Check if this domain was manually blocked
   const stored = await ext.storage.local.get("blockedDomains");
   const manuallyBlocked: string[] = stored.blockedDomains || [];
@@ -333,6 +359,7 @@ async function processRequest(
     tier: classification.tier,
     method,
     tabId,
+    partyContext,
   };
 
   // Store in-memory
@@ -547,24 +574,24 @@ ext.tabs.onRemoved.addListener((tabId) => {
 // ============================================================================
 // Page Navigation (Clear Logs)
 // ============================================================================
-ext.webNavigation.onCommitted.addListener((details) => {
-  if (details.frameId === 0 && details.tabId >= 0) {
+ext.tabs.onUpdated.addListener((tabId, changeInfo) => {
+  if (changeInfo.status === 'loading' && tabId >= 0) {
     // Main frame navigation: clear logs for this tab
-    tabLogs.delete(details.tabId);
+    tabLogs.delete(tabId);
     if (hasSessionStorage()) {
-      ext.storage.session.remove(`tabLog_${details.tabId}`);
+      ext.storage.session.remove(`tabLog_${tabId}`);
     }
     
     // Notify the popup to clear its UI
-    const port = connectedPorts.get(details.tabId);
+    const port = connectedPorts.get(tabId);
     if (port) {
       try {
-        port.postMessage({ type: "CLEAR_LOG", payload: { tabId: details.tabId } });
+        port.postMessage({ type: "CLEAR_LOG", payload: { tabId } });
       } catch (err) {
-        connectedPorts.delete(details.tabId);
+        connectedPorts.delete(tabId);
       }
     }
     
-    console.log(`[BeaconLight] Cleared logs for tab ${details.tabId} on navigation.`);
+    console.log(`[BeaconLight] Cleared logs for tab ${tabId} on navigation.`);
   }
 });

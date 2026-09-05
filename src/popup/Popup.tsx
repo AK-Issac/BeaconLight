@@ -94,6 +94,12 @@ function DomainGroup({
               {CATEGORY_LABELS[cat!] || cat}
             </span>
           ))}
+          {logs[0]?.partyContext === "1st-party" && (
+            <span className="request-card__badge" style={{color: '#34d399', borderColor: 'rgba(52, 211, 153, 0.4)'}}>1st Party</span>
+          )}
+          {logs[0]?.partyContext === "3rd-party" && (
+            <span className="request-card__badge" style={{color: '#fb923c', borderColor: 'rgba(251, 146, 60, 0.4)'}}>3rd Party</span>
+          )}
           {isAutoBlocked && (
             <span className="request-card__badge request-card__badge--blocked">
               Auto-blocked
@@ -208,6 +214,7 @@ function DomainGroup({
 export function Popup() {
   const [requestLogs, setRequestLogs] = useState<RequestLog[]>([]);
   const [filter, setFilter] = useState<FilterMode>("all");
+  const [hideFirstParty, setHideFirstParty] = useState(false);
   const [isMasterActive, setIsMasterActive] = useState(true);
   const [spoofEnabled, setSpoofEnabled] = useState(false);
   const [activeTabId, setActiveTabId] = useState<number | null>(null);
@@ -354,7 +361,11 @@ export function Popup() {
   const blockedCount = requestLogs.filter((l) => l.isBlocked || l.isAutoBlocked).length;
 
   // Apply filter
+  // Apply filter
   const filteredLogs = requestLogs.filter((log) => {
+    if (hideFirstParty && log.partyContext === "1st-party") {
+      return false;
+    }
     switch (filter) {
       case "flagged":
         return log.severity === "flagged";
@@ -414,16 +425,29 @@ export function Popup() {
 
         {/* Spoof Toggle - Only show if master is active */}
         {isMasterActive && (
-          <div className="header__spoof-row">
-            <span className="header__spoof-label">Global Spoofing</span>
-            <label className="toggle toggle--small" id="spoof-toggle">
-              <input
-                type="checkbox"
-                checked={spoofEnabled}
-                onChange={handleSpoofToggle}
-              />
-              <span className="toggle__slider" />
-            </label>
+          <div style={{ display: 'flex', gap: '16px', marginTop: '4px' }}>
+            <div className="header__spoof-row">
+              <span className="header__spoof-label">Hide 1st-Party</span>
+              <label className="toggle toggle--small" id="hide-1st-party-toggle">
+                <input
+                  type="checkbox"
+                  checked={hideFirstParty}
+                  onChange={() => setHideFirstParty(!hideFirstParty)}
+                />
+                <span className="toggle__slider" />
+              </label>
+            </div>
+            <div className="header__spoof-row">
+              <span className="header__spoof-label">Global Spoofing</span>
+              <label className="toggle toggle--small" id="spoof-toggle">
+                <input
+                  type="checkbox"
+                  checked={spoofEnabled}
+                  onChange={handleSpoofToggle}
+                />
+                <span className="toggle__slider" />
+              </label>
+            </div>
           </div>
         )}
 
@@ -511,9 +535,26 @@ export function Popup() {
             Session: {totalRequests} requests • {flaggedCount} flagged •{" "}
             {blockedCount} blocked
           </span>
-          <span className={`footer__link ${isMasterActive ? "pulse" : ""}`}>
-            {isMasterActive ? "● Live" : "○ Paused"}
-          </span>
+          <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+            <span
+              className="footer__link"
+              onClick={() => {
+                const data = JSON.stringify(requestLogs, null, 2);
+                const blob = new Blob([data], { type: "application/json" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = `beaconlight-session-${Date.now()}.json`;
+                a.click();
+                URL.revokeObjectURL(url);
+              }}
+            >
+              ⬇ Export JSON
+            </span>
+            <span className={`footer__link ${isMasterActive ? "pulse" : ""}`}>
+              {isMasterActive ? "● Live" : "○ Paused"}
+            </span>
+          </div>
         </div>
       </footer>
     </div>

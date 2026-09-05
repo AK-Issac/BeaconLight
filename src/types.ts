@@ -35,6 +35,7 @@ export interface RequestLog {
   tier: Tier;
   method: string;            // HTTP method (GET, POST, etc.)
   tabId: number;
+  partyContext?: "1st-party" | "3rd-party"; // 1st-party vs 3rd-party context
 }
 
 // ============================================================================
