@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BeaconLight — Test Page</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Inter', -apple-system, sans-serif;
+      background: #0f172a;
+      color: #e2e8f0;
+      padding: 40px;
+      line-height: 1.6;
+    }
+
+    h1 {
+      font-size: 28px;
+      font-weight: 800;
+      margin-bottom: 8px;
+      background: linear-gradient(135deg, #2dd4bf, #60a5fa);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .subtitle {
+      color: #94a3b8;
+      margin-bottom: 32px;
+      font-size: 14px;
+    }
+
+    .test-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+      gap: 16px;
+    }
+
+    .test-card {
+      background: rgba(30, 41, 59, 0.8);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 14px;
+      padding: 20px;
+      backdrop-filter: blur(12px);
+      transition: all 0.2s ease;
+    }
+
+    .test-card:hover {
+      border-color: rgba(255,255,255,0.15);
+      box-shadow: 0 4px 24px rgba(0,0,0,0.3);
+    }
+
+    .test-card h2 {
+      font-size: 15px;
+      font-weight: 700;
+      margin-bottom: 4px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .test-card .tag {
+      font-size: 10px;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 20px;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+
+    .tag--tier1 { background: rgba(248,113,113,0.15); color: #f87171; }
+    .tag--tier2 { background: rgba(251,191,36,0.15); color: #fbbf24; }
+    .tag--fingerprint { background: rgba(167,139,250,0.15); color: #a78bfa; }
+    .tag--location { background: rgba(251,191,36,0.15); color: #fbbf24; }
+    .tag--extension { background: rgba(96,165,250,0.15); color: #60a5fa; }
+    .tag--pii { background: rgba(251,113,133,0.15); color: #fb7185; }
+
+    .test-card p {
+      font-size: 12px;
+      color: #94a3b8;
+      margin-bottom: 12px;
+    }
+
+    button {
+      font-family: 'Inter', sans-serif;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 8px 16px;
+      border-radius: 8px;
+      border: 1px solid rgba(255,255,255,0.1);
+      background: rgba(45, 212, 191, 0.12);
+      color: #2dd4bf;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      margin-right: 8px;
+      margin-bottom: 6px;
+    }
+
+    button:hover {
+      background: rgba(45, 212, 191, 0.25);
+      box-shadow: 0 0 16px rgba(45, 212, 191, 0.15);
+    }
+
+    button:active {
+      transform: scale(0.97);
+    }
+
+    .status {
+      margin-top: 10px;
+      font-size: 11px;
+      color: #64748b;
+      min-height: 18px;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+    }
+
+    .status--success { color: #34d399; }
+    .status--error { color: #f87171; }
+
+    .results {
+      margin-top: 32px;
+      padding: 20px;
+      background: rgba(15, 23, 42, 0.9);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 14px;
+    }
+
+    .results h2 {
+      font-size: 14px;
+      font-weight: 700;
+      margin-bottom: 12px;
+      color: #94a3b8;
+    }
+
+    #result-log {
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: 11px;
+      color: #64748b;
+      max-height: 200px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+  </style>
+</head>
+<body>
+  <h1>🔦 BeaconLight Test Page</h1>
+  <p class="subtitle">Each button triggers a specific classification category. Open the BeaconLight popup to see requests appear in real time.</p>
+
+  <div class="test-grid">
+
+    <!-- ============================================================ -->
+    <!-- TIER 1: Known Tracker Domains (Auto-blocked) -->
+    <!-- ============================================================ -->
+    <div class="test-card" id="test-tier1">
+      <h2>
+        <span>Known Tracker Requests</span>
+        <span class="tag tag--tier1">Tier 1</span>
+      </h2>
+      <p>Sends requests to known tracker domains. These should be auto-blocked by DeclarativeNetRequest and appear as "Auto-blocked" in the popup.</p>
+      <button onclick="testKnownTrackers()" id="btn-tier1">Fire Tracker Requests</button>
+      <div class="status" id="status-tier1"></div>
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- TIER 2: Fingerprinting -->
+    <!-- ============================================================ -->
+    <div class="test-card" id="test-fingerprint">
+      <h2>
+        <span>Canvas Fingerprinting</span>
+        <span class="tag tag--fingerprint">Tier 2 — Fingerprint</span>
+      </h2>
+      <p>Draws to a canvas and extracts a data URL, then sends it to a mock endpoint. When spoofing is active, the canvas data should be subtly different.</p>
+      <button onclick="testCanvasFingerprint()" id="btn-fingerprint">Run Canvas Test</button>
+      <button onclick="testWebGLFingerprint()" id="btn-webgl">Run WebGL Test</button>
+      <div class="status" id="status-fingerprint"></div>
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- TIER 2: Geolocation -->
+    <!-- ============================================================ -->
+    <div class="test-card" id="test-location">
+      <h2>
+        <span>Geolocation Request</span>
+        <span class="tag tag--location">Tier 2 — Location</span>
+      </h2>
+      <p>Requests geolocation and sends coordinates to a mock endpoint. When spoofing is active, coordinates should be (0.0, 0.0) — "Null Island".</p>
+      <button onclick="testGeolocation()" id="btn-location">Request Location</button>
+      <div class="status" id="status-location"></div>
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- TIER 2: Extension Probing -->
+    <!-- ============================================================ -->
+    <div class="test-card" id="test-extension">
+      <h2>
+        <span>Extension Probe</span>
+        <span class="tag tag--extension">Tier 2 — Ext. Probe</span>
+      </h2>
+      <p>Attempts to detect installed browser extensions by probing for known extension resource URLs.</p>
+      <button onclick="testExtensionProbe()" id="btn-extension">Probe Extensions</button>
+      <div class="status" id="status-extension"></div>
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- TIER 2: PII Leakage -->
+    <!-- ============================================================ -->
+    <div class="test-card" id="test-pii">
+      <h2>
+        <span>PII Leakage</span>
+        <span class="tag tag--pii">Tier 2 — PII</span>
+      </h2>
+      <p>Sends a POST request containing an email, phone number, and name to a mock analytics endpoint.</p>
+      <button onclick="testPIILeakage()" id="btn-pii">Send PII Data</button>
+      <div class="status" id="status-pii"></div>
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- Neutral: Normal Request -->
+    <!-- ============================================================ -->
+    <div class="test-card" id="test-neutral">
+      <h2>
+        <span>Normal Request</span>
+        <span class="tag" style="background: rgba(52,211,153,0.15); color: #34d399;">Neutral</span>
+      </h2>
+      <p>Sends a standard GET request to a benign endpoint. Should appear as "neutral" with no flags.</p>
+      <button onclick="testNeutralRequest()" id="btn-neutral">Send Normal Request</button>
+      <div class="status" id="status-neutral"></div>
+    </div>
+
+  </div>
+
+  <!-- Result Log -->
+  <div class="results">
+    <h2>📋 Test Log</h2>
+    <div id="result-log">Waiting for tests...</div>
+  </div>
+
+  <script>
+    // ====================================================================
+    // Test Page Script
+    // Deliberately triggers each classification category for demo purposes.
+    // ====================================================================
+
+    function log(msg, isError = false) {
+      const el = document.getElementById('result-log');
+      const timestamp = new Date().toLocaleTimeString();
+      el.textContent += `\n[${timestamp}] ${isError ? '❌' : '✅'} ${msg}`;
+      el.scrollTop = el.scrollHeight;
+    }
+
+    function setStatus(id, msg, success = true) {
+      const el = document.getElementById(id);
+      el.textContent = msg;
+      el.className = success ? 'status status--success' : 'status status--error';
+    }
+
+    // ------------------------------------------------------------------
+    // TIER 1: Known Tracker Domains
+    // ------------------------------------------------------------------
+    async function testKnownTrackers() {
+      const trackers = [
+        'https://www.google-analytics.com/collect?v=1&t=pageview&tid=UA-XXXXX-1',
+        'https://connect.facebook.net/en_US/sdk.js',
+        'https://cdn.segment.io/v1/projects/demo/settings',
+        'https://static.hotjar.com/c/hotjar-demo.js',
+      ];
+
+      setStatus('status-tier1', 'Sending tracker requests...');
+      
+      for (const url of trackers) {
+        try {
+          await fetch(url, { mode: 'no-cors' });
+          log(`Tier 1 request sent to: ${new URL(url).hostname}`);
+        } catch (e) {
+          // Expected: DNR will block these, so fetch may fail
+          log(`Tier 1 request to ${new URL(url).hostname} — likely blocked by DNR`);
+        }
+      }
+
+      setStatus('status-tier1', 'Done — check popup for auto-blocked entries');
+    }
+
+    // ------------------------------------------------------------------
+    // TIER 2: Canvas Fingerprinting
+    // ------------------------------------------------------------------
+    async function testCanvasFingerprint() {
+      setStatus('status-fingerprint', 'Running canvas fingerprint...');
+
+      const canvas = document.createElement('canvas');
+      canvas.width = 200;
+      canvas.height = 50;
+      const ctx = canvas.getContext('2d');
+      
+      if (ctx) {
+        ctx.textBaseline = 'top';
+        ctx.font = '14px Arial';
+        ctx.fillStyle = '#f60';
+        ctx.fillRect(125, 1, 62, 20);
+        ctx.fillStyle = '#069';
+        ctx.fillText('BeaconLight FP Test 🔦', 2, 15);
+        ctx.fillStyle = 'rgba(102, 204, 0, 0.7)';
+        ctx.fillText('BeaconLight FP Test 🔦', 4, 17);
+      }
+
+      const dataUrl = canvas.toDataURL();
+      const fingerprint = dataUrl.slice(0, 100);
+
+      try {
+        await fetch('https://api.example.com/fingerprint/canvas', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            canvas_fingerprint: fingerprint,
+            toDataURL: dataUrl.substring(0, 200),
+          }),
+        });
+      } catch (e) {
+        // Expected in demo
+      }
+
+      log(`Canvas fingerprint collected: ${fingerprint.substring(0, 50)}...`);
+      setStatus('status-fingerprint', `Fingerprint: ${fingerprint.substring(22, 52)}...`);
+    }
+
+    // ------------------------------------------------------------------
+    // TIER 2: WebGL Fingerprinting
+    // ------------------------------------------------------------------
+    async function testWebGLFingerprint() {
+      setStatus('status-fingerprint', 'Running WebGL fingerprint...');
+
+      const canvas = document.createElement('canvas');
+      const gl = canvas.getContext('webgl');
+      
+      let vendor = 'unknown';
+      let renderer = 'unknown';
+
+      if (gl) {
+        const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
+        if (debugInfo) {
+          vendor = gl.getParameter(debugInfo.UNMASKED_VENDOR_WEBGL);
+          renderer = gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL);
+        }
+      }
+
+      try {
+        await fetch('https://api.example.com/fingerprint/webgl', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            webgl_vendor: vendor,
+            webgl_renderer: renderer,
+            getImageData: 'test',
+          }),
+        });
+      } catch (e) {
+        // Expected in demo
+      }
+
+      log(`WebGL fingerprint — Vendor: ${vendor}, Renderer: ${renderer}`);
+      setStatus('status-fingerprint', `WebGL: ${vendor} / ${renderer}`);
+    }
+
+    // ------------------------------------------------------------------
+    // TIER 2: Geolocation
+    // ------------------------------------------------------------------
+    function testGeolocation() {
+      setStatus('status-location', 'Requesting geolocation...');
+
+      if (!navigator.geolocation) {
+        setStatus('status-location', 'Geolocation not supported', false);
+        log('Geolocation API not available', true);
+        return;
+      }
+
+      navigator.geolocation.getCurrentPosition(
+        async (pos) => {
+          const { latitude, longitude, accuracy } = pos.coords;
+          
+          try {
+            await fetch('https://api.example.com/analytics/location', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                latitude: latitude,
+                longitude: longitude,
+                accuracy: accuracy,
+                geo_loc: true,
+              }),
+            });
+          } catch (e) {
+            // Expected in demo
+          }
+
+          log(`Geolocation: lat=${latitude}, lng=${longitude}, accuracy=${accuracy}m`);
+          setStatus('status-location', `Coords: ${latitude.toFixed(4)}, ${longitude.toFixed(4)}`);
+        },
+        (err) => {
+          log(`Geolocation error: ${err.message}`, true);
+          setStatus('status-location', `Error: ${err.message}`, false);
+        },
+        { enableHighAccuracy: true, timeout: 5000 }
+      );
+    }
+
+    // ------------------------------------------------------------------
+    // TIER 2: Extension Probing
+    // ------------------------------------------------------------------
+    async function testExtensionProbe() {
+      setStatus('status-extension', 'Probing for extensions...');
+
+      const knownExtensions = [
+        'chrome-extension://cjpalhdlnbpafiamejdnhcphjbkeiagm/asset/uBO-icon.svg', // uBlock
+        'chrome-extension://bgnkhhnnamicmpeenaelnjfhikgbkllg/icon48.png',           // AdGuard
+        'chrome-extension://nkbihfbeogaeaoehlefnkodbefgpgknn/images/icon-128.png',  // MetaMask
+      ];
+
+      for (const extUrl of knownExtensions) {
+        try {
+          await fetch(extUrl, { mode: 'no-cors' });
+          log(`Extension probe sent: ${extUrl.split('/')[2]}`);
+        } catch (e) {
+          log(`Extension probe failed (expected): ${extUrl.split('/')[2]}`);
+        }
+      }
+
+      // Also send an XHR to trigger the XHR patch
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', 'https://api.example.com/extensions/detect');
+      xhr.setRequestHeader('Content-Type', 'application/json');
+      xhr.send(JSON.stringify({
+        installed_extensions: ['ublock', 'adguard'],
+        plugin_detect: true,
+      }));
+
+      log('Extension probing complete');
+      setStatus('status-extension', 'Probing complete — check popup');
+    }
+
+    // ------------------------------------------------------------------
+    // TIER 2: PII Leakage
+    // ------------------------------------------------------------------
+    async function testPIILeakage() {
+      setStatus('status-pii', 'Sending PII data...');
+
+      try {
+        await fetch('https://api.example.com/analytics/user', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: 'user@example.com',
+            phone: '555-123-4567',
+            first_name: 'Ahmed',
+            last_name: 'Hassan',
+            address: '123 Main St, Springfield, IL',
+          }),
+        });
+      } catch (e) {
+        // Expected in demo
+      }
+
+      log('PII data sent: email, phone, name, address');
+      setStatus('status-pii', 'PII sent — check popup for alerts');
+    }
+
+    // ------------------------------------------------------------------
+    // Neutral: Normal Request
+    // ------------------------------------------------------------------
+    async function testNeutralRequest() {
+      setStatus('status-neutral', 'Sending normal request...');
+
+      try {
+        // Using a well-known benign API
+        await fetch('https://httpbin.org/get?demo=beaconlight');
+        log('Neutral request sent to httpbin.org');
+      } catch (e) {
+        log('Neutral request sent (may fail due to CORS — this is expected)');
+      }
+
+      setStatus('status-neutral', 'Sent — should appear as neutral in popup');
+    }
+  </script>
+</body>
+</html>

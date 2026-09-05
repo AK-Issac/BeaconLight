@@ -1,0 +1,25 @@
+{
+  "name": "beaconlight-extension",
+  "version": "1.0.0",
+  "description": "BeaconLight — Application-Level Privacy Inspector Chrome Extension",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite build --watch",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@crxjs/vite-plugin": "^2.0.0-beta.28",
+    "@types/chrome": "^0.0.270",
+    "@types/react": "^18.3.5",
+    "@types/react-dom": "^18.3.0",
+    "typescript": "^5.5.4",
+    "vite": "^5.4.3",
+    "@vitejs/plugin-react": "^4.3.1"
+  }
+}
