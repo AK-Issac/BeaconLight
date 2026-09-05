@@ -7,6 +7,8 @@
 //   3. Listen for spoofing toggle messages from background
 // ============================================================================
 
+import { ext, sendMessage } from "../browserApi";
+
 const BEACONLIGHT_MSG_SOURCE = "__beaconlight_inject__";
 
 /**
@@ -30,7 +32,7 @@ function injectPageScript(spoofEnabled: boolean) {
 
   // Then inject the main bundle
   const script = document.createElement("script");
-  script.src = chrome.runtime.getURL("assets/inject.js");
+  script.src = ext.runtime.getURL("assets/inject.js");
   script.type = "text/javascript";
   script.onload = () => script.remove(); // Clean up DOM after execution
   (document.documentElement || document.head || document.body).prepend(script);
@@ -47,7 +49,7 @@ window.addEventListener("message", (event) => {
 
   if (event.data.type === "OBSERVED_REQUEST") {
     // Relay the observed request to the background service worker
-    chrome.runtime.sendMessage({
+    sendMessage({
       type: "OBSERVED_REQUEST",
       payload: event.data.payload,
     });
@@ -58,7 +60,7 @@ window.addEventListener("message", (event) => {
  * Listen for messages from the background service worker.
  * Currently handles spoofing toggle for live enable/disable.
  */
-chrome.runtime.onMessage.addListener((message) => {
+ext.runtime.onMessage.addListener((message) => {
   if (message.type === "SPOOF_TOGGLE") {
     // For live toggle, we need to reload the page so the spoof flag
     // is set before inject.ts runs. This is a known MV3 limitation —
@@ -73,12 +75,12 @@ chrome.runtime.onMessage.addListener((message) => {
  * On initialization, check if the extension is master active and if spoofing is enabled
  * for this tab, then inject the page-context script accordingly.
  */
-chrome.runtime.sendMessage({ type: "GET_MASTER_ACTIVE" }, (masterResponse) => {
+sendMessage({ type: "GET_MASTER_ACTIVE" }, (masterResponse) => {
   if (masterResponse?.active === false) {
     return; // Do not inject if the extension is paused
   }
 
-  chrome.runtime.sendMessage({ type: "GET_SPOOF_STATE" }, (response) => {
+  sendMessage({ type: "GET_SPOOF_STATE" }, (response) => {
     const spoofEnabled = response?.enabled ?? false;
     injectPageScript(spoofEnabled);
   });

@@ -5,6 +5,7 @@
 
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import type { RequestLog, Category } from "../types";
+import { ext, sendMessage } from "../browserApi";
 
 type FilterMode = "all" | "flagged" | "blocked" | "spoofed";
 
@@ -215,13 +216,19 @@ export function Popup() {
 
   // Get active tab ID and master state on mount
   useEffect(() => {
-    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+    ext.tabs.query({ active: true, currentWindow: true }, (tabs) => {
       if (tabs[0]?.id) {
         setActiveTabId(tabs[0].id);
+        return;
       }
+      ext.tabs.query({ active: true, lastFocusedWindow: true }, (fallback) => {
+        if (fallback[0]?.id) {
+          setActiveTabId(fallback[0].id);
+        }
+      });
     });
 
-    chrome.runtime.sendMessage({ type: "GET_MASTER_ACTIVE" }, (response) => {
+    sendMessage({ type: "GET_MASTER_ACTIVE" }, (response) => {
       if (response && response.active !== undefined) {
         setIsMasterActive(response.active);
       }
@@ -232,7 +239,7 @@ export function Popup() {
   useEffect(() => {
     if (activeTabId === null) return;
 
-    chrome.runtime.sendMessage(
+    sendMessage(
       { type: "GET_TAB_LOG", payload: { tabId: activeTabId } },
       (response) => {
         if (response?.payload?.logs) {
@@ -241,7 +248,7 @@ export function Popup() {
       }
     );
 
-    const port = chrome.runtime.connect({
+    const port = ext.runtime.connect({
       name: `beaconlight-popup-${activeTabId}`,
     });
     portRef.current = port;
@@ -267,7 +274,7 @@ export function Popup() {
 
   const handleMasterToggle = useCallback(() => {
     const newState = !isMasterActive;
-    chrome.runtime.sendMessage(
+    sendMessage(
       { type: "SET_MASTER_ACTIVE", payload: { active: newState } },
       () => {
         setIsMasterActive(newState);
@@ -276,7 +283,7 @@ export function Popup() {
   }, [isMasterActive]);
 
   const handleBlock = useCallback((domain: string) => {
-    chrome.runtime.sendMessage(
+    sendMessage(
       { type: "BLOCK_DOMAIN", payload: { domain } },
       () => {
         setRequestLogs((prev) =>
@@ -289,7 +296,7 @@ export function Popup() {
   }, []);
 
   const handleUnblock = useCallback((domain: string) => {
-    chrome.runtime.sendMessage(
+    sendMessage(
       { type: "UNBLOCK_DOMAIN", payload: { domain } },
       () => {
         setRequestLogs((prev) =>
@@ -302,7 +309,7 @@ export function Popup() {
   }, []);
 
   const handleSpoof = useCallback((tabId: number) => {
-    chrome.runtime.sendMessage(
+    sendMessage(
       { type: "ENABLE_SPOOF", payload: { tabId } },
       () => {
         setSpoofEnabled(true);
@@ -319,7 +326,7 @@ export function Popup() {
     if (activeTabId === null) return;
 
     if (spoofEnabled) {
-      chrome.runtime.sendMessage({
+      sendMessage({
         type: "DISABLE_SPOOF",
         payload: { tabId: activeTabId },
       });
@@ -328,7 +335,7 @@ export function Popup() {
         prev.map((log) => ({ ...log, isSpoofed: false }))
       );
     } else {
-      chrome.runtime.sendMessage({
+      sendMessage({
         type: "ENABLE_SPOOF",
         payload: { tabId: activeTabId },
       });

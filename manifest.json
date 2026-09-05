@@ -25,10 +25,15 @@
     }
   ],
   "action": {
-    "default_title": "BeaconLight"
+    "default_title": "BeaconLight",
+    "default_popup": "index.html"
   },
   "side_panel": {
     "default_path": "index.html"
+  },
+  "sidebar_action": {
+    "default_title": "BeaconLight",
+    "default_panel": "index.html"
   },
   "web_accessible_resources": [
     {
@@ -36,5 +41,11 @@
       "matches": ["<all_urls>"]
     }
   ],
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "beaconlight@beaconlight.local",
+      "strict_min_version": "121.0"
+    }
+  },
   "icons": {}
 }

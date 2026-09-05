@@ -29,13 +29,45 @@ Recent cases like the LinkedIn "BrowserGate" incident revealed that websites act
 - **Framework:** React.js + TypeScript
 - **Build Tool:** Vite + `@crxjs/vite-plugin`
 - **Architecture:** Chrome Extension Manifest V3
-- **APIs Used:** `chrome.sidePanel`, `chrome.declarativeNetRequest`, `chrome.webRequest`, `chrome.storage`
+- **APIs Used:** `chrome.sidePanel` (Chrome/Edge/Brave), toolbar popup + `sidebar_action` (Opera GX / Firefox), `declarativeNetRequest`, `webRequest`, `chrome.storage`
 
 ## 🚀 Installation (Developer Mode)
 
-To run BeaconLight locally on your machine:
+BeaconLight is a Manifest V3 WebExtension. Chrome, Edge, and Brave use the **side panel**. Opera GX and Firefox use the **toolbar popup** (and Firefox/Opera can also pin the **sidebar**).
 
-1. **Clone the repository:**
+1. **Install and build:**
    ```bash
-   git clone https://github.com/your-username/beaconlight.git
-   cd beaconlight
+   npm install
+   npm run build
+   ```
+
+   For live reload while hacking on Chromium browsers:
+   ```bash
+   npm run dev
+   ```
+
+2. **Load the extension** in your browser (pick one):
+
+   **Chrome / Edge / Brave**
+   - Open `chrome://extensions` (or `edge://extensions` / `brave://extensions`)
+   - Enable **Developer mode**
+   - Click **Load unpacked** and select the `dist` folder
+
+   **Opera GX / Opera**
+   - Open `opera://extensions`
+   - Enable **Developer mode**
+   - Click **Load unpacked** and select the `dist` folder
+   - Click the BeaconLight toolbar icon to open the popup
+
+   **Firefox** (Firefox 121+)
+   ```bash
+   npm run build:firefox
+   ```
+   - Open `about:debugging#/runtime/this-firefox`
+   - Click **Load Temporary Add-on…**
+   - Select `dist-firefox/manifest.json` (the file, not the folder)
+   - Optionally open the sidebar: **View → Sidebar → BeaconLight**
+
+   **Safari** is not a drop-in load. Apple requires wrapping this as a Safari Web Extension in Xcode (`xcrun safari-web-extension-converter dist`). Tracking observation and spoofing can work; network blocking is limited on Safari.
+
+3. Click the BeaconLight icon. Browse any site (or open `test-page.html`) and requests will appear in the panel/popup.

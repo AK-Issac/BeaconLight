@@ -16,6 +16,14 @@ import {
   SPOOFABLE_CATEGORIES,
   MAX_BODY_PREVIEW_LENGTH,
 } from "../constants";
+import {
+  ext,
+  hasSidePanel,
+  hasDeclarativeNetRequest,
+  hasSessionStorage,
+  prefersToolbarPopup,
+  BLOCK_RESOURCE_TYPES,
+} from "../browserApi";
 
 // ============================================================================
 // State
@@ -160,38 +168,34 @@ function classifyRequest(
  * (demo-safe behavior — user starts fresh each session).
  */
 async function applyAutoBlockRules() {
+  if (!hasDeclarativeNetRequest()) {
+    console.warn(
+      "[BeaconLight] declarativeNetRequest is unavailable — observation still works, auto-block does not."
+    );
+    return;
+  }
+
   const rules: chrome.declarativeNetRequest.Rule[] =
     KNOWN_TRACKER_DOMAINS.map((domain, index) => ({
       id: index + 1, // Rule IDs 1..N for auto-block
       priority: 1,
       action: {
-        type: chrome.declarativeNetRequest.RuleActionType.BLOCK,
+        type: "block" as chrome.declarativeNetRequest.RuleActionType,
       },
       condition: {
         urlFilter: `||${domain}`,
-        resourceTypes: [
-          chrome.declarativeNetRequest.ResourceType.XMLHTTPREQUEST,
-          chrome.declarativeNetRequest.ResourceType.SCRIPT,
-          chrome.declarativeNetRequest.ResourceType.IMAGE,
-          chrome.declarativeNetRequest.ResourceType.SUB_FRAME,
-          chrome.declarativeNetRequest.ResourceType.STYLESHEET,
-          chrome.declarativeNetRequest.ResourceType.FONT,
-          chrome.declarativeNetRequest.ResourceType.MEDIA,
-          chrome.declarativeNetRequest.ResourceType.PING,
-          chrome.declarativeNetRequest.ResourceType.OTHER,
-        ],
+        resourceTypes: BLOCK_RESOURCE_TYPES,
       },
     }));
 
   try {
     // Remove any existing session rules first
-    const existingRules =
-      await chrome.declarativeNetRequest.getSessionRules();
+    const existingRules = await ext.declarativeNetRequest.getSessionRules();
     const removeIds = existingRules
       .filter((r) => r.id < 10000) // Only remove auto-block rules (< 10000)
       .map((r) => r.id);
 
-    await chrome.declarativeNetRequest.updateSessionRules({
+    await ext.declarativeNetRequest.updateSessionRules({
       removeRuleIds: removeIds,
       addRules: rules,
     });
@@ -212,35 +216,27 @@ async function blockDomain(domain: string) {
     id: ruleId,
     priority: 2,
     action: {
-      type: chrome.declarativeNetRequest.RuleActionType.BLOCK,
+      type: "block" as chrome.declarativeNetRequest.RuleActionType,
     },
     condition: {
       urlFilter: `||${domain}`,
-      resourceTypes: [
-        chrome.declarativeNetRequest.ResourceType.XMLHTTPREQUEST,
-        chrome.declarativeNetRequest.ResourceType.SCRIPT,
-        chrome.declarativeNetRequest.ResourceType.IMAGE,
-        chrome.declarativeNetRequest.ResourceType.SUB_FRAME,
-        chrome.declarativeNetRequest.ResourceType.STYLESHEET,
-        chrome.declarativeNetRequest.ResourceType.FONT,
-        chrome.declarativeNetRequest.ResourceType.MEDIA,
-        chrome.declarativeNetRequest.ResourceType.PING,
-        chrome.declarativeNetRequest.ResourceType.OTHER,
-      ],
+      resourceTypes: BLOCK_RESOURCE_TYPES,
     },
   };
 
   try {
-    await chrome.declarativeNetRequest.updateDynamicRules({
-      addRules: [rule],
-    });
+    if (hasDeclarativeNetRequest()) {
+      await ext.declarativeNetRequest.updateDynamicRules({
+        addRules: [rule],
+      });
+    }
 
     // Persist to chrome.storage.local
-    const stored = await chrome.storage.local.get("blockedDomains");
+    const stored = await ext.storage.local.get("blockedDomains");
     const blockedDomains: string[] = stored.blockedDomains || [];
     if (!blockedDomains.includes(domain)) {
       blockedDomains.push(domain);
-      await chrome.storage.local.set({ blockedDomains });
+      await ext.storage.local.set({ blockedDomains });
     }
 
     // Update in-memory logs to reflect blocked state
@@ -263,23 +259,24 @@ async function blockDomain(domain: string) {
  */
 async function unblockDomain(domain: string) {
   try {
-    // Find and remove the dynamic rule for this domain
-    const dynamicRules = await chrome.declarativeNetRequest.getDynamicRules();
-    const ruleToRemove = dynamicRules.find(
-      (r) => r.condition.urlFilter === `||${domain}`
-    );
-    if (ruleToRemove) {
-      await chrome.declarativeNetRequest.updateDynamicRules({
-        removeRuleIds: [ruleToRemove.id],
-      });
+    if (hasDeclarativeNetRequest()) {
+      const dynamicRules = await ext.declarativeNetRequest.getDynamicRules();
+      const ruleToRemove = dynamicRules.find(
+        (r) => r.condition.urlFilter === `||${domain}`
+      );
+      if (ruleToRemove) {
+        await ext.declarativeNetRequest.updateDynamicRules({
+          removeRuleIds: [ruleToRemove.id],
+        });
+      }
     }
 
     // Remove from chrome.storage.local
-    const stored = await chrome.storage.local.get("blockedDomains");
+    const stored = await ext.storage.local.get("blockedDomains");
     const blockedDomains: string[] = (stored.blockedDomains || []).filter(
       (d: string) => d !== domain
     );
-    await chrome.storage.local.set({ blockedDomains });
+    await ext.storage.local.set({ blockedDomains });
 
     // Update in-memory logs
     for (const [, logs] of tabLogs) {
@@ -316,7 +313,7 @@ async function processRequest(
   const classification = classifyRequest(url, domain, bodyPreview, method);
 
   // Check if this domain was manually blocked
-  const stored = await chrome.storage.local.get("blockedDomains");
+  const stored = await ext.storage.local.get("blockedDomains");
   const manuallyBlocked: string[] = stored.blockedDomains || [];
   const isManuallyBlocked = manuallyBlocked.includes(domain);
 
@@ -350,11 +347,13 @@ async function processRequest(
     logs.splice(0, logs.length - 500);
   }
 
-  // Persist to chrome.storage.session
-  try {
-    await chrome.storage.session.set({ [`tabLog_${tabId}`]: logs });
-  } catch {
-    // Storage quota exceeded — acceptable for demo
+  // Persist to chrome.storage.session when the browser supports it
+  if (hasSessionStorage()) {
+    try {
+      await ext.storage.session.set({ [`tabLog_${tabId}`]: logs });
+    } catch {
+      // Storage quota exceeded — acceptable for demo
+    }
   }
 
   // Push live update to connected popup
@@ -372,7 +371,7 @@ async function processRequest(
 // ============================================================================
 // webRequest Observation (Section 6.1)
 // ============================================================================
-chrome.webRequest.onBeforeRequest.addListener(
+ext.webRequest.onBeforeRequest.addListener(
   (details) => {
     // Use webRequest for URL-level observation. Body content comes from
     // the content script patch (inject.ts), so bodyPreview is null here.
@@ -384,7 +383,7 @@ chrome.webRequest.onBeforeRequest.addListener(
 // ============================================================================
 // Message Routing
 // ============================================================================
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+ext.runtime.onMessage.addListener((message, sender, sendResponse) => {
   const tabId = sender.tab?.id;
 
   switch (message.type) {
@@ -425,7 +424,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       tabSpoofState[spoofTabId] = true;
 
       // Notify the content script to enable spoofing on next load
-      chrome.tabs.sendMessage(spoofTabId, {
+      ext.tabs.sendMessage(spoofTabId, {
         type: "SPOOF_TOGGLE",
         payload: { enabled: true },
       });
@@ -448,7 +447,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       const disableSpoofTabId = message.payload.tabId;
       tabSpoofState[disableSpoofTabId] = false;
 
-      chrome.tabs.sendMessage(disableSpoofTabId, {
+      ext.tabs.sendMessage(disableSpoofTabId, {
         type: "SPOOF_TOGGLE",
         payload: { enabled: false },
       });
@@ -478,7 +477,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     case "SET_MASTER_ACTIVE": {
       isMasterActive = message.payload.active;
-      chrome.storage.local.set({ masterActive: isMasterActive });
+      ext.storage.local.set({ masterActive: isMasterActive });
       sendResponse({ success: true });
       return true;
     }
@@ -488,7 +487,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 // ============================================================================
 // Port-based Live Updates (Popup ↔ Background)
 // ============================================================================
-chrome.runtime.onConnect.addListener((port) => {
+ext.runtime.onConnect.addListener((port) => {
   if (port.name.startsWith("beaconlight-popup-")) {
     const portTabId = parseInt(port.name.replace("beaconlight-popup-", ""), 10);
     if (!isNaN(portTabId)) {
@@ -504,44 +503,57 @@ chrome.runtime.onConnect.addListener((port) => {
 // ============================================================================
 // Lifecycle: Install & Startup
 // ============================================================================
-chrome.runtime.onInstalled.addListener(async () => {
+async function setupSidePanelBehavior() {
+  if (!hasSidePanel() || prefersToolbarPopup()) return;
+  try {
+    await ext.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
+  } catch (error) {
+    console.warn("[BeaconLight] sidePanel unavailable, using popup/sidebar fallback.", error);
+  }
+}
+
+ext.runtime.onInstalled.addListener(async () => {
   console.log("[BeaconLight] Extension installed. Applying auto-block rules...");
   await applyAutoBlockRules();
-  chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch((error) => console.error(error));
-  
-  const stored = await chrome.storage.local.get("masterActive");
+  await setupSidePanelBehavior();
+
+  const stored = await ext.storage.local.get("masterActive");
   if (stored.masterActive !== undefined) {
     isMasterActive = stored.masterActive;
   }
 });
 
-chrome.runtime.onStartup.addListener(async () => {
+ext.runtime.onStartup.addListener(async () => {
   console.log("[BeaconLight] Browser started. Re-applying auto-block rules...");
   await applyAutoBlockRules();
-  chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch((error) => console.error(error));
+  await setupSidePanelBehavior();
 
-  const stored = await chrome.storage.local.get("masterActive");
+  const stored = await ext.storage.local.get("masterActive");
   if (stored.masterActive !== undefined) {
     isMasterActive = stored.masterActive;
   }
 });
 
 // Clean up tab logs when a tab is closed
-chrome.tabs.onRemoved.addListener((tabId) => {
+ext.tabs.onRemoved.addListener((tabId) => {
   tabLogs.delete(tabId);
   delete tabSpoofState[tabId];
   connectedPorts.delete(tabId);
-  chrome.storage.session.remove(`tabLog_${tabId}`);
+  if (hasSessionStorage()) {
+    ext.storage.session.remove(`tabLog_${tabId}`);
+  }
 });
 
 // ============================================================================
 // Page Navigation (Clear Logs)
 // ============================================================================
-chrome.webNavigation.onCommitted.addListener((details) => {
+ext.webNavigation.onCommitted.addListener((details) => {
   if (details.frameId === 0 && details.tabId >= 0) {
     // Main frame navigation: clear logs for this tab
     tabLogs.delete(details.tabId);
-    chrome.storage.session.remove(`tabLog_${details.tabId}`);
+    if (hasSessionStorage()) {
+      ext.storage.session.remove(`tabLog_${details.tabId}`);
+    }
     
     // Notify the popup to clear its UI
     const port = connectedPorts.get(details.tabId);
