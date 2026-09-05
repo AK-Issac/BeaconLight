@@ -18,12 +18,14 @@
 
 html,
 body {
-  width: 400px;
-  height: 600px;
+  width: 100%;
+  min-height: 100vh;
   margin: 0;
   padding: 0;
   background-color: var(--terminal-bg);
-  overflow: hidden;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 @media (min-height: 640px) {

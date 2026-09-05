@@ -64,6 +64,12 @@ function DomainGroup({
             {CATEGORY_LABELS[cat!] || cat}
           </span>
         ))}
+        {logs[0]?.partyContext === "1st-party" && (
+          <span className="badge" style={{borderColor: 'var(--terminal-green)', color: 'var(--terminal-green)'}}>1st Party</span>
+        )}
+        {logs[0]?.partyContext === "3rd-party" && (
+          <span className="badge" style={{borderColor: 'var(--terminal-warn)', color: 'var(--terminal-warn)'}}>3rd Party</span>
+        )}
         {isAutoBlocked && <span className="badge blocked">Auto-block</span>}
         {isBlocked && !isAutoBlocked && <span className="badge blocked">Blocked</span>}
         {isSpoofed && <span className="badge spoofed">Spoofed</span>}
@@ -150,6 +156,7 @@ export function Popup() {
     preview ? createPreviewLogs() : []
   );
   const [filter, setFilter] = useState<FilterMode>("all");
+  const [hideFirstParty, setHideFirstParty] = useState(false);
   const [isMasterActive, setIsMasterActive] = useState(true);
   const [spoofEnabled, setSpoofEnabled] = useState(false);
   const [activeTabId, setActiveTabId] = useState<number | null>(preview ? 1 : null);
@@ -292,7 +299,11 @@ export function Popup() {
   const flaggedCount = requestLogs.filter((l) => l.severity === "flagged").length;
   const blockedCount = requestLogs.filter((l) => l.isBlocked || l.isAutoBlocked).length;
 
+
   const filteredLogs = requestLogs.filter((log) => {
+    if (hideFirstParty && log.partyContext === "1st-party") {
+      return false;
+    }
     switch (filter) {
       case "flagged":
         return log.severity === "flagged";
@@ -318,7 +329,7 @@ export function Popup() {
       const bFlagged = logsB.some((l) => l.severity === "flagged");
       if (aFlagged && !bFlagged) return -1;
       if (!aFlagged && bFlagged) return 1;
-      return 0;
+return 0;
     });
   }, [filteredLogs]);
 
@@ -359,6 +370,13 @@ export function Popup() {
             disabled={!isMasterActive}
           >
             SPOOF {spoofEnabled ? "ON" : "OFF"}
+          </button>
+          <button
+            type="button"
+            className={`mode-btn ${hideFirstParty ? "mode-active" : ""}`}
+            onClick={() => setHideFirstParty(!hideFirstParty)}
+          >
+            HIDE 1ST {hideFirstParty ? "ON" : "OFF"}
           </button>
         </div>
       </div>
@@ -433,10 +451,27 @@ export function Popup() {
         <span>
           {totalRequests} REQ · {flaggedCount} FLAG · {blockedCount} BLOCK
         </span>
-        <span className={`footer-live ${isMasterActive ? "on" : ""}`}>
-          {isMasterActive ? "LIVE" : "PAUSED"}
-          {isMasterActive && <span className="cursor" />}
-        </span>
+        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+          <span
+            style={{ cursor: 'pointer', color: 'var(--terminal-blue)' }}
+            onClick={() => {
+              const data = JSON.stringify(requestLogs, null, 2);
+              const blob = new Blob([data], { type: "application/json" });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.href = url;
+              a.download = `beaconlight-session-${Date.now()}.json`;
+              a.click();
+              URL.revokeObjectURL(url);
+            }}
+          >
+            [EXPORT]
+          </span>
+          <span className={`footer-live ${isMasterActive ? "on" : ""}`}>
+            {isMasterActive ? "LIVE" : "PAUSED"}
+            {isMasterActive && <span className="cursor" />}
+          </span>
+        </div>
       </footer>
     </div>
   );
