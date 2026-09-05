@@ -42,6 +42,7 @@ export function sendMessage(
   callback?: (response: any) => void
 ): void {
   try {
+    if (!ext?.runtime?.sendMessage) return;
     ext.runtime.sendMessage(message, (response) => {
       consumeLastError();
       callback?.(response);
