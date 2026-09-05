@@ -1,24 +1,10 @@
-// ============================================================================
-// BeaconLight — Popup.tsx (Side Panel)
-// Main React UI component for the extension side panel.
-// ============================================================================
-
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import type { RequestLog, Category } from "../types";
 import { ext, sendMessage } from "../browserApi";
+import { createPreviewLogs, isPreviewMode } from "./previewData";
 
 type FilterMode = "all" | "flagged" | "blocked" | "spoofed";
 
-/** Map categories to badge CSS class suffixes */
-const CATEGORY_BADGE_CLASS: Record<string, string> = {
-  "known-tracker": "tracker",
-  fingerprinting: "fingerprint",
-  location: "location",
-  "extension-probe": "extension-probe",
-  pii: "pii",
-};
-
-/** Map categories to human-readable short labels */
 const CATEGORY_LABELS: Record<string, string> = {
   "known-tracker": "Tracker",
   fingerprinting: "Fingerprint",
@@ -27,7 +13,6 @@ const CATEGORY_LABELS: Record<string, string> = {
   pii: "PII",
 };
 
-/** Format a timestamp as relative time */
 function formatTime(ts: number): string {
   const diff = Math.floor((Date.now() - ts) / 1000);
   if (diff < 5) return "just now";
@@ -36,9 +21,6 @@ function formatTime(ts: number): string {
   return `${Math.floor(diff / 3600)}h ago`;
 }
 
-// ============================================================================
-// DomainGroup Component (Accordion)
-// ============================================================================
 function DomainGroup({
   domain,
   logs,
@@ -59,123 +41,85 @@ function DomainGroup({
   const hasFlagged = logs.some((l) => l.severity === "flagged");
   const isSpoofable = logs.some((l) => l.spoofable);
   const isSpoofed = logs.some((l) => l.isSpoofed);
-
-  const severityClass = hasFlagged ? "flagged" : "neutral";
-  const blockedClass = isBlocked || isAutoBlocked ? "blocked" : "";
-
-  // Get unique categories for badges
-  const categories = Array.from(new Set(logs.map((l) => l.category).filter(Boolean))) as Category[];
+  const categories = Array.from(
+    new Set(logs.map((l) => l.category).filter(Boolean))
+  ) as Category[];
 
   return (
     <div
-      className={`request-card request-card--${severityClass} ${
-        blockedClass ? "request-card--blocked" : ""
+      className={`log-entry ${hasFlagged ? "flagged" : ""} ${
+        isBlocked || isAutoBlocked ? "blocked" : ""
       }`}
     >
-      <div
-        className="request-card__top"
-        onClick={() => setExpanded(!expanded)}
-        style={{ cursor: "pointer" }}
-      >
-        <div className="request-card__domain-row">
-          {hasFlagged && <span className="request-card__flag">🚩</span>}
-          <span className="request-card__domain">{domain}</span>
-          <span className="request-card__count">({logs.length})</span>
-          <span className="request-card__expand-icon">{expanded ? "▼" : "▶"}</span>
-        </div>
-        <div className="request-card__badges">
-          {categories.map((cat) => (
-            <span
-              key={cat}
-              className={`request-card__badge request-card__badge--${
-                CATEGORY_BADGE_CLASS[cat!] || "tracker"
-              }`}
-            >
-              {CATEGORY_LABELS[cat!] || cat}
-            </span>
-          ))}
-          {logs[0]?.partyContext === "1st-party" && (
-            <span className="request-card__badge" style={{color: '#34d399', borderColor: 'rgba(52, 211, 153, 0.4)'}}>1st Party</span>
-          )}
-          {logs[0]?.partyContext === "3rd-party" && (
-            <span className="request-card__badge" style={{color: '#fb923c', borderColor: 'rgba(251, 146, 60, 0.4)'}}>3rd Party</span>
-          )}
-          {isAutoBlocked && (
-            <span className="request-card__badge request-card__badge--blocked">
-              Auto-blocked
-            </span>
-          )}
-          {isBlocked && !isAutoBlocked && (
-            <span className="request-card__badge request-card__badge--blocked">
-              Blocked
-            </span>
-          )}
-          {isSpoofed && (
-            <span className="request-card__badge request-card__badge--spoofed">
-              Spoofed
-            </span>
-          )}
-        </div>
+      <div className="log-head" onClick={() => setExpanded(!expanded)}>
+        {hasFlagged && <span className="log-flag">!</span>}
+        <span className="log-domain">{domain}</span>
+        <span className="log-count">[{logs.length}]</span>
+        <span className="log-expand">{expanded ? "[-]" : "[+]"}</span>
       </div>
 
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginTop: "8px",
-        }}
-      >
-        <div className="request-card__actions">
-          {isAutoBlocked ? (
-            <span className="request-card__auto-blocked">
-              🛡️ Auto-blocked Tracker
-            </span>
-          ) : (
-            <>
-              {isBlocked ? (
-                <button
-                  className="request-card__btn request-card__btn--unblock"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onUnblock(domain);
-                  }}
-                >
-                  Unblock
-                </button>
-              ) : (
-                <button
-                  className="request-card__btn request-card__btn--block"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onBlock(domain);
-                  }}
-                >
-                  Block
-                </button>
-              )}
-              {isSpoofable && !isSpoofed && (
-                <button
-                  className="request-card__btn request-card__btn--spoof"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    // Grab tabId from the first log
-                    onSpoof(logs[0].tabId);
-                  }}
-                >
-                  Spoof
-                </button>
-              )}
-            </>
-          )}
-        </div>
+      <div className="log-badges">
+        {categories.map((cat) => (
+          <span key={cat} className={`badge ${cat}`}>
+            {CATEGORY_LABELS[cat!] || cat}
+          </span>
+        ))}
+        {logs[0]?.partyContext === "1st-party" && (
+          <span className="badge" style={{borderColor: 'var(--terminal-green)', color: 'var(--terminal-green)'}}>1st Party</span>
+        )}
+        {logs[0]?.partyContext === "3rd-party" && (
+          <span className="badge" style={{borderColor: 'var(--terminal-warn)', color: 'var(--terminal-warn)'}}>3rd Party</span>
+        )}
+        {isAutoBlocked && <span className="badge blocked">Auto-block</span>}
+        {isBlocked && !isAutoBlocked && <span className="badge blocked">Blocked</span>}
+        {isSpoofed && <span className="badge spoofed">Spoofed</span>}
+      </div>
+
+      <div className="log-actions">
+        {isAutoBlocked ? (
+          <span className="auto-blocked">AUTO-BLOCKED TRACKER</span>
+        ) : (
+          <>
+            {isBlocked ? (
+              <button
+                className="btn-approve"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onUnblock(domain);
+                }}
+              >
+                UNBLOCK
+              </button>
+            ) : (
+              <button
+                className="btn-abort"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onBlock(domain);
+                }}
+              >
+                BLOCK
+              </button>
+            )}
+            {isSpoofable && !isSpoofed && (
+              <button
+                className="btn-approve"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onSpoof(logs[0].tabId);
+                }}
+              >
+                SPOOF
+              </button>
+            )}
+          </>
+        )}
       </div>
 
       {expanded && (
-        <div className="request-card__details">
+        <div className="log-details">
           {[...logs]
             .sort((a, b) => {
-              // Flagged items to the top
               if (a.severity === "flagged" && b.severity !== "flagged") return -1;
               if (a.severity !== "flagged" && b.severity === "flagged") return 1;
               return b.timestamp - a.timestamp;
@@ -183,46 +127,46 @@ function DomainGroup({
             .map((log) => (
               <div
                 key={log.id}
-                className={`request-card__log-item ${
-                  log.severity === "flagged" ? "request-card__log-item--flagged" : ""
-                }`}
+                className={`log-line ${log.severity === "flagged" ? "flagged" : ""}`}
               >
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
-                  <span className="request-card__method">{log.method}</span>
-                  <span className="request-card__time">{formatTime(log.timestamp)}</span>
+                <div className="log-meta">
+                  <span className="log-method">{log.method}</span>
+                  <span className="log-time">{formatTime(log.timestamp)}</span>
                 </div>
                 {log.severity === "flagged" && (
-                  <div className="request-card__culprit-alert">
-                    ⚠️ {CATEGORY_LABELS[log.category!] || "Suspicious behavior"}
+                  <div className="log-alert">
+                    {CATEGORY_LABELS[log.category!] || "SUSPICIOUS"}
                   </div>
                 )}
-                <p className="request-card__description">{log.plainDescription}</p>
-                <div className="request-card__url" title={log.url}>
+                <p className="log-desc">{log.plainDescription}</p>
+                <div className="log-url" title={log.url}>
                   {log.url}
                 </div>
               </div>
-          ))}
+            ))}
         </div>
       )}
     </div>
   );
 }
 
-// ============================================================================
-// Main Popup Component (Side Panel)
-// ============================================================================
 export function Popup() {
-  const [requestLogs, setRequestLogs] = useState<RequestLog[]>([]);
+  const preview = isPreviewMode();
+  const [requestLogs, setRequestLogs] = useState<RequestLog[]>(() =>
+    preview ? createPreviewLogs() : []
+  );
   const [filter, setFilter] = useState<FilterMode>("all");
   const [hideFirstParty, setHideFirstParty] = useState(false);
   const [isMasterActive, setIsMasterActive] = useState(true);
   const [spoofEnabled, setSpoofEnabled] = useState(false);
-  const [activeTabId, setActiveTabId] = useState<number | null>(null);
+  const [activeTabId, setActiveTabId] = useState<number | null>(preview ? 1 : null);
   const portRef = useRef<chrome.runtime.Port | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
-  // Get active tab ID and master state on mount
   useEffect(() => {
+    if (preview) return;
+
+    if (!ext?.tabs?.query) return;
     ext.tabs.query({ active: true, currentWindow: true }, (tabs) => {
       if (tabs[0]?.id) {
         setActiveTabId(tabs[0].id);
@@ -240,11 +184,10 @@ export function Popup() {
         setIsMasterActive(response.active);
       }
     });
-  }, []);
+  }, [preview]);
 
-  // Fetch initial logs and open port for live updates
   useEffect(() => {
-    if (activeTabId === null) return;
+    if (preview || activeTabId === null || !ext?.runtime?.connect) return;
 
     sendMessage(
       { type: "GET_TAB_LOG", payload: { tabId: activeTabId } },
@@ -277,91 +220,86 @@ export function Popup() {
       port.disconnect();
       portRef.current = null;
     };
-  }, [activeTabId]);
+  }, [activeTabId, preview]);
 
   const handleMasterToggle = useCallback(() => {
     const newState = !isMasterActive;
+    if (preview) {
+      setIsMasterActive(newState);
+      return;
+    }
     sendMessage(
       { type: "SET_MASTER_ACTIVE", payload: { active: newState } },
       () => {
         setIsMasterActive(newState);
       }
     );
-  }, [isMasterActive]);
+  }, [isMasterActive, preview]);
 
-  const handleBlock = useCallback((domain: string) => {
-    sendMessage(
-      { type: "BLOCK_DOMAIN", payload: { domain } },
-      () => {
-        setRequestLogs((prev) =>
-          prev.map((log) =>
-            log.domain === domain ? { ...log, isBlocked: true } : log
-          )
-        );
+  const handleBlock = useCallback(
+    (domain: string) => {
+      if (!preview) {
+        sendMessage({ type: "BLOCK_DOMAIN", payload: { domain } });
       }
-    );
-  }, []);
+      setRequestLogs((prev) =>
+        prev.map((log) =>
+          log.domain === domain ? { ...log, isBlocked: true } : log
+        )
+      );
+    },
+    [preview]
+  );
 
-  const handleUnblock = useCallback((domain: string) => {
-    sendMessage(
-      { type: "UNBLOCK_DOMAIN", payload: { domain } },
-      () => {
-        setRequestLogs((prev) =>
-          prev.map((log) =>
-            log.domain === domain ? { ...log, isBlocked: false } : log
-          )
-        );
+  const handleUnblock = useCallback(
+    (domain: string) => {
+      if (!preview) {
+        sendMessage({ type: "UNBLOCK_DOMAIN", payload: { domain } });
       }
-    );
-  }, []);
+      setRequestLogs((prev) =>
+        prev.map((log) =>
+          log.domain === domain ? { ...log, isBlocked: false } : log
+        )
+      );
+    },
+    [preview]
+  );
 
-  const handleSpoof = useCallback((tabId: number) => {
-    sendMessage(
-      { type: "ENABLE_SPOOF", payload: { tabId } },
-      () => {
-        setSpoofEnabled(true);
-        setRequestLogs((prev) =>
-          prev.map((log) =>
-            log.spoofable ? { ...log, isSpoofed: true } : log
-          )
-        );
+  const handleSpoof = useCallback(
+    (tabId: number) => {
+      if (!preview) {
+        sendMessage({ type: "ENABLE_SPOOF", payload: { tabId } });
       }
-    );
-  }, []);
+      setSpoofEnabled(true);
+      setRequestLogs((prev) =>
+        prev.map((log) => (log.spoofable ? { ...log, isSpoofed: true } : log))
+      );
+    },
+    [preview]
+  );
 
   const handleSpoofToggle = useCallback(() => {
     if (activeTabId === null) return;
-
-    if (spoofEnabled) {
+    const next = !spoofEnabled;
+    if (!preview) {
       sendMessage({
-        type: "DISABLE_SPOOF",
+        type: next ? "ENABLE_SPOOF" : "DISABLE_SPOOF",
         payload: { tabId: activeTabId },
       });
-      setSpoofEnabled(false);
-      setRequestLogs((prev) =>
-        prev.map((log) => ({ ...log, isSpoofed: false }))
-      );
-    } else {
-      sendMessage({
-        type: "ENABLE_SPOOF",
-        payload: { tabId: activeTabId },
-      });
-      setSpoofEnabled(true);
-      setRequestLogs((prev) =>
-        prev.map((log) =>
-          log.spoofable ? { ...log, isSpoofed: true } : log
-        )
-      );
     }
-  }, [activeTabId, spoofEnabled]);
+    setSpoofEnabled(next);
+    setRequestLogs((prev) =>
+      prev.map((log) => ({
+        ...log,
+        isSpoofed: next && log.spoofable,
+      }))
+    );
+  }, [activeTabId, spoofEnabled, preview]);
 
-  // Compute summary stats
   const totalRequests = requestLogs.length;
   const flaggedCount = requestLogs.filter((l) => l.severity === "flagged").length;
   const blockedCount = requestLogs.filter((l) => l.isBlocked || l.isAutoBlocked).length;
 
-  // Apply filter
-  // Apply filter
+
   const filteredLogs = requestLogs.filter((log) => {
     if (hideFirstParty && log.partyContext === "1st-party") {
       return false;
@@ -378,7 +316,6 @@ export function Popup() {
     }
   });
 
-  // Group by Domain
   const groupedLogs = useMemo(() => {
     const groups: Record<string, RequestLog[]> = {};
     for (const log of filteredLogs) {
@@ -387,131 +324,113 @@ export function Popup() {
       }
       groups[log.domain].push(log);
     }
-    // Sort groups: flagged domains first, then alphabetically
-    return Object.entries(groups).sort(([domainA, logsA], [domainB, logsB]) => {
+    return Object.entries(groups).sort(([, logsA], [, logsB]) => {
       const aFlagged = logsA.some((l) => l.severity === "flagged");
       const bFlagged = logsB.some((l) => l.severity === "flagged");
       if (aFlagged && !bFlagged) return -1;
       if (!aFlagged && bFlagged) return 1;
-      return domainA.localeCompare(domainB);
+return 0;
     });
   }, [filteredLogs]);
 
   return (
-    <div className="beaconlight" id="beaconlight-root">
-      {/* Header */}
-      <header className="header">
-        <div className="header__top">
-          <div className="header__brand">
-            <div className="header__logo">B</div>
-            <h1 className="header__title">BeaconLight</h1>
-          </div>
-          <div className="header__toggles">
-            <div className="header__master-toggle">
-              <span className="header__toggle-label">
-                {isMasterActive ? "Active" : "Paused"}
-              </span>
-              <label className="toggle" id="master-toggle">
-                <input
-                  type="checkbox"
-                  checked={isMasterActive}
-                  onChange={handleMasterToggle}
-                />
-                <span className="toggle__slider" />
-              </label>
-            </div>
-          </div>
+    <div className="terminal-container" id="beaconlight-root">
+      <header className="terminal-header">
+        <div className="window-controls" aria-hidden="true">
+          <span className="control red" />
+          <span className="control yellow" />
+          <span className="control green" />
         </div>
-
-        {/* Spoof Toggle - Only show if master is active */}
-        {isMasterActive && (
-          <div style={{ display: 'flex', gap: '16px', marginTop: '4px' }}>
-            <div className="header__spoof-row">
-              <span className="header__spoof-label">Hide 1st-Party</span>
-              <label className="toggle toggle--small" id="hide-1st-party-toggle">
-                <input
-                  type="checkbox"
-                  checked={hideFirstParty}
-                  onChange={() => setHideFirstParty(!hideFirstParty)}
-                />
-                <span className="toggle__slider" />
-              </label>
-            </div>
-            <div className="header__spoof-row">
-              <span className="header__spoof-label">Global Spoofing</span>
-              <label className="toggle toggle--small" id="spoof-toggle">
-                <input
-                  type="checkbox"
-                  checked={spoofEnabled}
-                  onChange={handleSpoofToggle}
-                />
-                <span className="toggle__slider" />
-              </label>
-            </div>
-          </div>
-        )}
-
-        <div className="header__stats">
-          <div className="stat-chip stat-chip--flagged">
-            <span className="stat-chip__icon">🚩</span>
-            <span className="stat-chip__value">{flaggedCount}</span>
-            <span>Flagged</span>
-          </div>
-          <div className="stat-chip stat-chip--blocked">
-            <span className="stat-chip__icon">🛡️</span>
-            <span className="stat-chip__value">{blockedCount}</span>
-            <span>Blocked</span>
-          </div>
-          <div className="stat-chip stat-chip--total">
-            <span className="stat-chip__icon">📡</span>
-            <span className="stat-chip__value">{totalRequests}</span>
-            <span>Total</span>
-          </div>
-        </div>
+        <h1 className="terminal-title">user@beaconlight: ~</h1>
+        <span className={`token-counter ${flaggedCount > 0 ? "warning" : ""}`}>
+          {flaggedCount} FLAG
+        </span>
+        <button
+          type="button"
+          className={`stop-button ${isMasterActive ? "" : "run"}`}
+          onClick={handleMasterToggle}
+        >
+          {isMasterActive ? "PAUSE" : "RUN"}
+        </button>
       </header>
 
-      {/* Filter Bar */}
-      <div className="filter-bar" id="filter-bar">
-        {(["all", "flagged", "blocked", "spoofed"] as FilterMode[]).map(
-          (mode) => (
-            <button
-              key={mode}
-              className={`filter-btn ${
-                filter === mode ? "filter-btn--active" : ""
-              }`}
-              onClick={() => setFilter(mode)}
-              id={`filter-${mode}`}
-            >
-              {mode === "all"
-                ? "All"
-                : mode.charAt(0).toUpperCase() + mode.slice(1)}
-            </button>
-          )
-        )}
+      <div className="control-strip">
+        <div className="mode-toggle">
+          <button
+            type="button"
+            className={`mode-btn ${isMasterActive ? "mode-active" : ""}`}
+            onClick={handleMasterToggle}
+          >
+            GUARD {isMasterActive ? "ON" : "OFF"}
+          </button>
+          <button
+            type="button"
+            className={`mode-btn ${spoofEnabled ? "mode-active" : ""}`}
+            onClick={handleSpoofToggle}
+            disabled={!isMasterActive}
+          >
+            SPOOF {spoofEnabled ? "ON" : "OFF"}
+          </button>
+          <button
+            type="button"
+            className={`mode-btn ${hideFirstParty ? "mode-active" : ""}`}
+            onClick={() => setHideFirstParty(!hideFirstParty)}
+          >
+            HIDE 1ST {hideFirstParty ? "ON" : "OFF"}
+          </button>
+        </div>
       </div>
 
-      {/* Request List (Accordion) */}
-      <div className="request-list" ref={listRef} id="request-list">
+      <div className="stats-row">
+        <div className="stat-box stat-box--flag">
+          <span className="stat-box__value">{flaggedCount}</span>
+          <span className="stat-box__label">Flagged</span>
+        </div>
+        <div className="stat-box stat-box--block">
+          <span className="stat-box__value">{blockedCount}</span>
+          <span className="stat-box__label">Blocked</span>
+        </div>
+        <div className="stat-box">
+          <span className="stat-box__value">{totalRequests}</span>
+          <span className="stat-box__label">Total</span>
+        </div>
+      </div>
+
+      <div className="tab-buttons" id="filter-bar">
+        {(["all", "flagged", "blocked", "spoofed"] as FilterMode[]).map((mode) => (
+          <button
+            key={mode}
+            type="button"
+            className={`tab-btn ${filter === mode ? "active" : ""}`}
+            onClick={() => setFilter(mode)}
+            id={`filter-${mode}`}
+          >
+            {mode}
+          </button>
+        ))}
+      </div>
+
+      <div className="console-output" ref={listRef} id="request-list">
         {!isMasterActive ? (
-          <div className="request-list__empty">
-            <span className="request-list__empty-icon">⏸️</span>
-            <span className="request-list__empty-title">BeaconLight is Paused</span>
-            <span className="request-list__empty-subtitle">
-              Toggle the Active switch above to resume request observation.
+          <div className="log-entry system">
+            <span className="log-method">$ guard --pause</span>
+            <span className="cursor" />
+            <span className="empty-title">MONITORING PAUSED</span>
+            <span className="empty-sub">
+              Hit RUN or GUARD ON to watch what this page sends about you.
             </span>
           </div>
         ) : groupedLogs.length === 0 ? (
-          <div className="request-list__empty">
-            <span className="request-list__empty-icon">🔍</span>
-            <span className="request-list__empty-title">
-              {filter === "all"
-                ? "No requests captured yet"
-                : `No ${filter} requests`}
+          <div className="log-entry system">
+            <span className="log-method">$ tail -f requests</span>
+            <span className="cursor" />
+            <span className="empty-title">
+              {filter === "all" ? "WAITING FOR TRAFFIC" : `NO ${filter.toUpperCase()} REQUESTS`}
             </span>
-            <span className="request-list__empty-subtitle">
+            <span className="empty-sub">
               {filter === "all"
-                ? "Browse the web and BeaconLight will show you what data is being sent about you."
-                : "Try switching to a different filter to see more results."}
+                ? "Browse a site. Packets will print here as they leave the browser."
+                : "Try another tab, or keep browsing."}
             </span>
           </div>
         ) : (
@@ -528,33 +447,30 @@ export function Popup() {
         )}
       </div>
 
-      {/* Footer */}
-      <footer className="footer" id="footer">
-        <div className="footer__summary">
-          <span>
-            Session: {totalRequests} requests • {flaggedCount} flagged •{" "}
-            {blockedCount} blocked
+      <footer className="terminal-footer">
+        <span>
+          {totalRequests} REQ · {flaggedCount} FLAG · {blockedCount} BLOCK
+        </span>
+        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+          <span
+            style={{ cursor: 'pointer', color: 'var(--terminal-blue)' }}
+            onClick={() => {
+              const data = JSON.stringify(requestLogs, null, 2);
+              const blob = new Blob([data], { type: "application/json" });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.href = url;
+              a.download = `beaconlight-session-${Date.now()}.json`;
+              a.click();
+              URL.revokeObjectURL(url);
+            }}
+          >
+            [EXPORT]
           </span>
-          <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-            <span
-              className="footer__link"
-              onClick={() => {
-                const data = JSON.stringify(requestLogs, null, 2);
-                const blob = new Blob([data], { type: "application/json" });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement("a");
-                a.href = url;
-                a.download = `beaconlight-session-${Date.now()}.json`;
-                a.click();
-                URL.revokeObjectURL(url);
-              }}
-            >
-              ⬇ Export JSON
-            </span>
-            <span className={`footer__link ${isMasterActive ? "pulse" : ""}`}>
-              {isMasterActive ? "● Live" : "○ Paused"}
-            </span>
-          </div>
+          <span className={`footer-live ${isMasterActive ? "on" : ""}`}>
+            {isMasterActive ? "LIVE" : "PAUSED"}
+            {isMasterActive && <span className="cursor" />}
+          </span>
         </div>
       </footer>
     </div>
