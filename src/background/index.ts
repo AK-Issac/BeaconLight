@@ -8,7 +8,14 @@
 //   - Port-based live updates to the popup
 // ============================================================================
 
-import type { RequestLog, Category, Severity, Tier, TabSpoofState } from "../types";
+import type {
+  RequestLog,
+  Category,
+  Severity,
+  Tier,
+  TabSpoofState,
+  RequestOverrideAction,
+} from "../types";
 import {
   KNOWN_TRACKER_DOMAINS,
   HEURISTIC_PATTERNS,
@@ -31,6 +38,9 @@ import {
 
 /** Per-tab spoofing state (in-memory, lost on SW restart — acceptable for demo) */
 const tabSpoofState: TabSpoofState = {};
+
+/** Per-tab, per-request allow/block overrides for manual request-level decisions */
+const requestOverrideState: Map<number, Map<string, RequestOverrideAction>> = new Map();
 
 /** Master extension active state */
 let isMasterActive = true;
@@ -389,6 +399,9 @@ async function processRequest(
   const manuallyBlocked: string[] = stored.blockedDomains || [];
   const isManuallyBlocked = manuallyBlocked.includes(domain);
 
+  const overrideAction = requestOverrideState.get(tabId)?.get(url) ?? null;
+  const isOverrideBlocked = overrideAction === "block";
+
   const log: RequestLog = {
     id: generateId(),
     url,
@@ -398,10 +411,11 @@ async function processRequest(
     category: classification.category,
     plainDescription: classification.plainDescription,
     bodyPreview: bodyPreview?.slice(0, MAX_BODY_PREVIEW_LENGTH) || null,
-    isBlocked: classification.isAutoBlocked || isManuallyBlocked,
+    isBlocked: classification.isAutoBlocked || isManuallyBlocked || isOverrideBlocked,
     isAutoBlocked: classification.isAutoBlocked,
     isSpoofed: tabSpoofState[tabId] === true && classification.spoofable,
     spoofable: classification.spoofable,
+    overrideAction,
     tier: classification.tier,
     method,
     tabId,
@@ -494,6 +508,27 @@ ext.runtime.onMessage.addListener((message, sender, sendResponse) => {
     case "BLOCK_DOMAIN": {
       blockDomain(message.payload.domain);
       sendResponse({ success: true });
+      return true;
+    }
+
+    case "SET_REQUEST_OVERRIDE": {
+      const { tabId: requestTabId, requestId, action } = message.payload;
+      if (!requestTabId || !requestId) {
+        sendResponse({ success: false });
+        return true;
+      }
+
+      const tabOverrides = requestOverrideState.get(requestTabId) ?? new Map<string, RequestOverrideAction>();
+      requestOverrideState.set(requestTabId, tabOverrides);
+
+      const matchingLog = tabLogs.get(requestTabId)?.find((log) => log.id === requestId);
+      if (matchingLog) {
+        tabOverrides.set(matchingLog.url, action);
+        matchingLog.overrideAction = action;
+        matchingLog.isBlocked = action === "block";
+      }
+
+      sendResponse({ success: true, action });
       return true;
     }
 

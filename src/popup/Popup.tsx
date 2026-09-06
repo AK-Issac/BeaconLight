@@ -95,17 +95,20 @@ function DomainGroup({
   onBlock,
   onUnblock,
   onSpoof,
+  onRequestOverride,
 }: {
   domain: string;
   logs: RequestLog[];
   onBlock: (domain: string) => void;
   onUnblock: (domain: string) => void;
   onSpoof: (tabId: number) => void;
+  onRequestOverride: (tabId: number, requestId: string, action: "allow" | "block") => void;
 }) {
   const [expanded, setExpanded] = useState(false);
 
   const isAutoBlocked = logs.some((l) => l.isAutoBlocked);
-  const isBlocked = logs.some((l) => l.isBlocked);
+  const isDomainBlocked = logs.some((l) => l.isBlocked && !l.overrideAction);
+  const hasRequestOverrideBlock = logs.some((l) => l.overrideAction === "block");
   const hasFlagged = logs.some((l) => l.severity === "flagged");
   const isSpoofable = logs.some((l) => l.spoofable);
   const isSpoofed = logs.some((l) => l.isSpoofed);
@@ -115,8 +118,7 @@ function DomainGroup({
 
   return (
     <div
-      className={`log-entry ${hasFlagged ? "flagged" : ""} ${isBlocked || isAutoBlocked ? "blocked" : ""
-        }`}
+      className={`log-entry ${hasFlagged ? "flagged" : ""} ${isDomainBlocked || isAutoBlocked ? "blocked" : ""}`}
     >
       <div className="log-head" onClick={() => setExpanded(!expanded)}>
         {hasFlagged && <span className="log-flag">!</span>}
@@ -138,7 +140,8 @@ function DomainGroup({
           <span className="badge" style={{ borderColor: 'var(--terminal-warn)', color: 'var(--terminal-warn)' }}>3rd Party</span>
         )}
         {isAutoBlocked && <span className="badge blocked">Auto-block</span>}
-        {isBlocked && !isAutoBlocked && <span className="badge blocked">Blocked</span>}
+        {isDomainBlocked && !isAutoBlocked && <span className="badge blocked">Blocked</span>}
+        {hasRequestOverrideBlock && <span className="badge">Request Block</span>}
         {isSpoofed && <span className="badge spoofed">Spoofed</span>}
       </div>
 
@@ -147,7 +150,7 @@ function DomainGroup({
           <span className="auto-blocked">AUTO-BLOCKED TRACKER</span>
         ) : (
           <>
-            {isBlocked ? (
+            {isDomainBlocked ? (
               <button
                 className="btn-approve"
                 onClick={(e) => {
@@ -246,6 +249,18 @@ function DomainGroup({
                 <p className="log-desc">{log.plainDescription}</p>
                 <div className="log-url" title={log.url}>
                   {log.url}
+                </div>
+                <div className="log-actions" style={{ marginTop: "10px" }}>
+                  <button
+                    type="button"
+                    className={log.overrideAction === "block" ? "btn-abort" : "btn-approve"}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onRequestOverride(log.tabId, log.id, log.overrideAction === "block" ? "allow" : "block");
+                    }}
+                  >
+                    {log.overrideAction === "block" ? "ALLOW REQUEST" : "BLOCK REQUEST"}
+                  </button>
                 </div>
                 <ExplainButton
                   url={log.url}
@@ -403,6 +418,28 @@ export function Popup() {
       setSpoofEnabled(true);
       setRequestLogs((prev) =>
         prev.map((log) => (log.spoofable ? { ...log, isSpoofed: true } : log))
+      );
+    },
+    [preview]
+  );
+
+  const handleRequestOverride = useCallback(
+    (tabId: number, requestId: string, action: "allow" | "block") => {
+      if (!preview) {
+        sendMessage({ type: "SET_REQUEST_OVERRIDE", payload: { tabId, requestId, action } });
+      }
+      setRequestLogs((prev) =>
+        prev.map((log) => {
+          if (log.id !== requestId) return log;
+          const nextIsBlocked = action === "block";
+          return {
+            ...log,
+            overrideAction: action,
+          // do NOT toggle domain-wide isBlocked here
+          // request override is independent from domain block state
+          isBlocked: action === "block" && !log.isAutoBlocked,
+          };
+        })
       );
     },
     [preview]
@@ -606,6 +643,7 @@ export function Popup() {
                 onBlock={handleBlock}
                 onUnblock={handleUnblock}
                 onSpoof={handleSpoof}
+                onRequestOverride={handleRequestOverride}
               />
             ))
           )}

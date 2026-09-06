@@ -6,6 +6,9 @@
 /** Severity levels for classified requests */
 export type Severity = "flagged" | "neutral";
 
+/** Per-request manual override for specific logged requests */
+export type RequestOverrideAction = "allow" | "block";
+
 /** Categories assigned by the classification engine */
 export type Category =
   | "known-tracker"       // Tier 1: domain in KNOWN_TRACKER_DOMAINS
@@ -32,6 +35,7 @@ export interface RequestLog {
   isAutoBlocked: boolean;   // True for Tier 1 known trackers
   isSpoofed: boolean;
   spoofable: boolean;        // True if category supports spoofing (fingerprinting, location)
+  overrideAction?: RequestOverrideAction | null;
   tier: Tier;
   method: string;            // HTTP method (GET, POST, etc.)
   tabId: number;
@@ -74,6 +78,16 @@ export interface BlockDomainMessage {
   type: "BLOCK_DOMAIN";
   payload: {
     domain: string;
+  };
+}
+
+/** Sent from popup → background to override a specific request's behavior */
+export interface SetRequestOverrideMessage {
+  type: "SET_REQUEST_OVERRIDE";
+  payload: {
+    tabId: number;
+    requestId: string;
+    action: RequestOverrideAction;
   };
 }
 
@@ -145,6 +159,7 @@ export type SpotLightMessage =
   | GetTabLogMessage
   | TabLogResponse
   | BlockDomainMessage
+  | SetRequestOverrideMessage
   | UnblockDomainMessage
   | EnableSpoofMessage
   | DisableSpoofMessage
