@@ -107,7 +107,9 @@ function DomainGroup({
   const [expanded, setExpanded] = useState(false);
 
   const isAutoBlocked = logs.some((l) => l.isAutoBlocked);
-  const isDomainBlocked = logs.some((l) => l.isBlocked && !l.overrideAction);
+  const isDomainBlocked = logs.some(
+    (l) => l.isBlocked && (!l.overrideAction || logs.length === 1)
+  );
   const hasRequestOverrideBlock = logs.some((l) => l.overrideAction === "block");
   const hasFlagged = logs.some((l) => l.severity === "flagged");
   const isSpoofable = logs.some((l) => l.spoofable);
@@ -432,12 +434,16 @@ export function Popup() {
         prev.map((log) => {
           if (log.id !== requestId) return log;
           const nextIsBlocked = action === "block";
+
+          const singleRequestForDomain =
+            prev.filter((entry) => entry.domain === log.domain).length === 1;
           return {
             ...log,
             overrideAction: action,
           // do NOT toggle domain-wide isBlocked here
           // request override is independent from domain block state
-          isBlocked: action === "block" && !log.isAutoBlocked,
+          isBlocked: 
+            action === "block" && (!log.isAutoBlocked || singleRequestForDomain),
           };
         })
       );
