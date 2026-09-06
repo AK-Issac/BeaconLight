@@ -28,6 +28,8 @@ export function hasSessionStorage(): boolean {
 
 /** Opera GX and Firefox should use the toolbar popup, not Chrome's side panel. */
 export function prefersToolbarPopup(): boolean {
+  const g = globalThis as typeof globalThis & { opr?: unknown; opera?: unknown };
+  if (g.opr || g.opera) return true;
   const ua = globalThis.navigator?.userAgent ?? "";
   return /OPR\/|Opera|Firefox\//.test(ua);
 }

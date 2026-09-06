@@ -1,7 +1,9 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+﻿import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import type { RequestLog, Category } from "../types";
 import { ext, sendMessage } from "../browserApi";
 import { createPreviewLogs, isPreviewMode } from "./previewData";
+import { explainRequestLocally } from "../utils/aiExplainer";
+import type { ExplainResult } from "../utils/aiExplainer";
 
 type FilterMode = "all" | "flagged" | "blocked" | "spoofed";
 
@@ -19,6 +21,71 @@ function formatTime(ts: number): string {
   if (diff < 60) return `${diff}s ago`;
   if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
   return `${Math.floor(diff / 3600)}h ago`;
+}
+
+// ─────────────────────────────────────────────
+// ExplainButton — local on-device AI explainer
+// ─────────────────────────────────────────────
+function ExplainButton({
+  url,
+  method,
+  payload,
+  category,
+}: {
+  url: string;
+  method: string;
+  payload: string | null;
+  category: string | null;
+}) {
+  const [state, setState] = useState<"idle" | "loading" | "done">("idle");
+  const [result, setResult] = useState<ExplainResult | null>(null);
+
+  const handleExplain = async () => {
+    if (state === "loading") return;
+    setState("loading");
+    const r = await explainRequestLocally(url, method, payload, category);
+    setResult(r);
+    setState("done");
+  };
+
+  const badgeLabel =
+    result?.source === "gemini-nano" ? "🤖 GEMINI NANO" : "🔍 HEURISTIC ANALYSIS";
+  const badgeClass =
+    result?.source === "gemini-nano" ? "explain-badge explain-badge--nano" : "explain-badge explain-badge--heuristic";
+
+  return (
+    <div className="explain-wrapper">
+      {state === "idle" && (
+        <button
+          type="button"
+          className="btn-explain"
+          onClick={handleExplain}
+          title="Analyse this request locally — no data leaves your device"
+        >
+          ✨ EXPLAIN
+        </button>
+      )}
+      {state === "loading" && (
+        <span className="explain-loading">Analyzing payload &amp; request semantics...</span>
+      )}
+      {state === "done" && result && (
+        <div className="explain-card">
+          <div className="explain-card__header">
+            <span className={badgeClass}>{badgeLabel}</span>
+            <button
+              type="button"
+              className="explain-dismiss"
+              onClick={() => setState("idle")}
+              aria-label="Dismiss explanation"
+            >
+              ✕
+            </button>
+          </div>
+          <p className="explain-text">{result.text}</p>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function DomainGroup({
@@ -179,6 +246,12 @@ function DomainGroup({
                 <div className="log-url" title={log.url}>
                   {log.url}
                 </div>
+                <ExplainButton
+                  url={log.url}
+                  method={log.method}
+                  payload={log.bodyPreview}
+                  category={log.category}
+                />
               </div>
             ))}
         </div>
@@ -543,3 +616,4 @@ export function Popup() {
     </div>
   );
 }
+
