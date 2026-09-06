@@ -58,16 +58,19 @@ window.addEventListener("message", (event) => {
 
 /**
  * Listen for messages from the background service worker.
- * Currently handles spoofing toggle for live enable/disable.
+ * Relays manual spoof toggle into the page's MAIN context (inject.ts).
  */
-ext.runtime.onMessage.addListener((message) => {
+ext.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message.type === "SPOOF_TOGGLE") {
-    // For live toggle, we need to reload the page so the spoof flag
-    // is set before inject.ts runs. This is a known MV3 limitation —
-    // overrides must be applied before the page's scripts execute.
-    // Assumption: For the hackathon demo, we store the state and apply
-    // on next page load rather than forcing a reload.
-    // The background will persist the spoof state per tab.
+    window.postMessage(
+      {
+        source: BEACONLIGHT_MSG_SOURCE,
+        type: "SET_SPOOF_STATE",
+        enabled: message.payload.enabled,
+      },
+      "*"
+    );
+    sendResponse?.({ success: true });
   }
 });
 

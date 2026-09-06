@@ -68,6 +68,25 @@
   // ========================================================================
   // Patch: window.fetch (observational only — does NOT block)
   // ========================================================================
+  // Helper: sanitize sensitive fields when spoofing is active
+  function sanitizePayload(body: unknown): any {
+    if (!spoofActive || !body) return body;
+    try {
+      if (typeof body === "string") {
+        return body
+          .replace(/"lat":\s*[-\d.]+/gi, '"lat":0.0')
+          .replace(/"lng":\s*[-\d.]+/gi, '"lng":0.0')
+          .replace(/"lon":\s*[-\d.]+/gi, '"lon":0.0')
+          .replace(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g, "anonymous@privacy.local")
+          .replace(/\b\d{3}[-.]?\d{3}[-.]?\d{4}\b/g, "555-000-0000");
+      }
+    } catch { }
+    return body;
+  }
+
+  // ========================================================================
+  // Patch: window.fetch (observational + payload spoofing)
+  // ========================================================================
   const originalFetch = window.fetch;
   window.fetch = function (
     input: RequestInfo | URL,
@@ -78,9 +97,15 @@
         input instanceof Request
           ? input.url
           : input instanceof URL
-          ? input.href
-          : String(input);
+            ? input.href
+            : String(input);
       const method = init?.method || (input instanceof Request ? input.method : "GET");
+
+      // When spoofing is active, sanitize outgoing body
+      if (spoofActive && init?.body) {
+        init.body = sanitizePayload(init.body);
+      }
+
       const bodyPreview = serializeBody(init?.body);
       reportRequest(url, method.toUpperCase(), bodyPreview);
     } catch {
@@ -124,8 +149,27 @@
   // CRITICAL: All spoofed data must be syntactically valid to prevent
   // breaking the web page. See spec Section 7.3.
   // ========================================================================
-  if ((window as any).__beaconlightSpoofEnabled) {
-    // --- Navigator / UA spoofing ---
+  // Track spoof state
+  let spoofActive = Boolean((window as any).__beaconlightSpoofEnabled);
+
+  // If already enabled at startup, apply immediately
+  if (spoofActive) {
+    applyBrowserSpoofing();
+  }
+
+  // Listen for the user clicking "Spoof" in the popup mid-session
+  window.addEventListener("message", (event) => {
+    if (event.source !== window || !event.data) return;
+    if (event.data.source === BEACONLIGHT_MSG_SOURCE && event.data.type === "SET_SPOOF_STATE") {
+      spoofActive = Boolean(event.data.enabled);
+      (window as any).__beaconlightSpoofEnabled = spoofActive;
+      if (spoofActive) {
+        applyBrowserSpoofing();
+      }
+    }
+  });
+
+  function applyBrowserSpoofing() {
     try {
       Object.defineProperty(navigator, "userAgent", {
         get: () =>
@@ -283,7 +327,7 @@
       // Geolocation spoofing failed — non-critical
     }
 
-    // Notify the content script that spoofing was applied
+    // Notify that spoofing was applied
     window.postMessage(
       {
         source: BEACONLIGHT_MSG_SOURCE,

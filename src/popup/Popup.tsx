@@ -47,9 +47,8 @@ function DomainGroup({
 
   return (
     <div
-      className={`log-entry ${hasFlagged ? "flagged" : ""} ${
-        isBlocked || isAutoBlocked ? "blocked" : ""
-      }`}
+      className={`log-entry ${hasFlagged ? "flagged" : ""} ${isBlocked || isAutoBlocked ? "blocked" : ""
+        }`}
     >
       <div className="log-head" onClick={() => setExpanded(!expanded)}>
         {hasFlagged && <span className="log-flag">!</span>}
@@ -65,10 +64,10 @@ function DomainGroup({
           </span>
         ))}
         {logs[0]?.partyContext === "1st-party" && (
-          <span className="badge" style={{borderColor: 'var(--terminal-green)', color: 'var(--terminal-green)'}}>1st Party</span>
+          <span className="badge" style={{ borderColor: 'var(--terminal-green)', color: 'var(--terminal-green)' }}>1st Party</span>
         )}
         {logs[0]?.partyContext === "3rd-party" && (
-          <span className="badge" style={{borderColor: 'var(--terminal-warn)', color: 'var(--terminal-warn)'}}>3rd Party</span>
+          <span className="badge" style={{ borderColor: 'var(--terminal-warn)', color: 'var(--terminal-warn)' }}>3rd Party</span>
         )}
         {isAutoBlocked && <span className="badge blocked">Auto-block</span>}
         {isBlocked && !isAutoBlocked && <span className="badge blocked">Blocked</span>}
@@ -133,6 +132,44 @@ function DomainGroup({
                   <span className="log-method">{log.method}</span>
                   <span className="log-time">{formatTime(log.timestamp)}</span>
                 </div>
+                {/* Visual Spoofing Breakdown */}
+                {log.isSpoofed && (
+                  <div
+                    style={{
+                      background: "rgba(45, 212, 191, 0.06)",
+                      border: "1px solid rgba(45, 212, 191, 0.25)",
+                      borderRadius: "4px",
+                      padding: "8px 10px",
+                      margin: "6px 0",
+                      fontSize: "11px",
+                      fontFamily: "var(--terminal-font)",
+                    }}
+                  >
+                    <div style={{ color: "#2dd4bf", fontWeight: "bold", marginBottom: "4px", letterSpacing: "0.5px" }}>
+                      🎭 ACTIVE DEFENSE: DATA SPOOFED
+                    </div>
+                    <div style={{ color: "#94a3b8", marginBottom: "2px" }}>
+                      <span style={{ color: "#ff3e3e" }}>Actual: </span>
+                      {log.category === "location"
+                        ? "Real GPS Latitude & Longitude (Protected)"
+                        : log.category === "fingerprinting"
+                          ? "Real GPU, Screen & Canvas ID (Protected)"
+                          : log.category === "pii"
+                            ? "Personal Email, Phone & Name (Protected)"
+                            : "Real User Data (Protected)"}
+                    </div>
+                    <div style={{ color: "#94a3b8" }}>
+                      <span style={{ color: "#00ff41" }}>Sent:   </span>
+                      {log.category === "location"
+                        ? "Coords: (0.0000, 0.0000) [Null Island]"
+                        : log.category === "fingerprinting"
+                          ? "Intel Iris OpenGL Engine + Scrambled Pixel Noise"
+                          : log.category === "pii"
+                            ? "anonymous@privacy.local (Synthetic PII)"
+                            : "Generic Synthetic Parameters"}
+                    </div>
+                  </div>
+                )}
                 {log.severity === "flagged" && (
                   <div className="log-alert">
                     {CATEGORY_LABELS[log.category!] || "SUSPICIOUS"}
@@ -155,7 +192,7 @@ export function Popup() {
   const [requestLogs, setRequestLogs] = useState<RequestLog[]>(() =>
     preview ? createPreviewLogs() : []
   );
-  const [filter, setFilter] = useState<FilterMode>("all");
+  const [filter, setFilter] = useState<FilterMode>("all"); //TODO maybe make it flagged
   const [hideFirstParty, setHideFirstParty] = useState(false);
   const [isMasterActive, setIsMasterActive] = useState(true);
   const [spoofEnabled, setSpoofEnabled] = useState(false);
@@ -164,26 +201,45 @@ export function Popup() {
   const listRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (preview) return;
+    if (preview || !ext?.tabs?.query) return;
 
-    if (!ext?.tabs?.query) return;
-    ext.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-      if (tabs[0]?.id) {
-        setActiveTabId(tabs[0].id);
-        return;
-      }
-      ext.tabs.query({ active: true, lastFocusedWindow: true }, (fallback) => {
-        if (fallback[0]?.id) {
-          setActiveTabId(fallback[0].id);
+    const syncActiveTab = () => {
+      ext.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        const tab = tabs[0];
+        if (tab?.id) {
+          setActiveTabId(tab.id);
+          // Sync spoof toggle for this active tab
+          ext.tabs.sendMessage(tab.id, { type: "GET_SPOOF_STATE" }, (res) => {
+            if (!chrome.runtime.lastError && res) {
+              setSpoofEnabled(res.enabled ?? false);
+            }
+          });
         }
       });
-    });
+    };
+
+    syncActiveTab();
+
+    const onActivated = () => syncActiveTab();
+    const onUpdated = (_tabId: number, changeInfo: chrome.tabs.TabChangeInfo) => {
+      if (changeInfo.status === "complete") {
+        syncActiveTab();
+      }
+    };
+
+    ext.tabs.onActivated?.addListener(onActivated);
+    ext.tabs.onUpdated?.addListener(onUpdated);
 
     sendMessage({ type: "GET_MASTER_ACTIVE" }, (response) => {
       if (response && response.active !== undefined) {
         setIsMasterActive(response.active);
       }
     });
+
+    return () => {
+      ext.tabs.onActivated?.removeListener(onActivated);
+      ext.tabs.onUpdated?.removeListener(onUpdated);
+    };
   }, [preview]);
 
   useEffect(() => {
@@ -329,7 +385,7 @@ export function Popup() {
       const bFlagged = logsB.some((l) => l.severity === "flagged");
       if (aFlagged && !bFlagged) return -1;
       if (!aFlagged && bFlagged) return 1;
-return 0;
+      return 0;
     });
   }, [filteredLogs]);
 
@@ -429,9 +485,20 @@ return 0;
             </span>
             <span className="empty-sub">
               {filter === "all"
-                ? "Browse a site. Packets will print here as they leave the browser."
+                ? "If this tab was already open, reload it to inspect its traffic."
                 : "Try another tab, or keep browsing."}
             </span>
+            {filter === "all" && activeTabId && (
+              <button
+                className="btn-approve"
+                style={{ marginTop: "10px", padding: "5px 12px", width: "fit-content", fontSize: "11px" }}
+                onClick={() => {
+                  ext.tabs?.reload?.(activeTabId);
+                }}
+              >
+                [RELOAD TAB TO INSPECT]
+              </button>
+            )}
           </div>
         ) : (
           groupedLogs.map(([domain, logs]) => (

@@ -137,7 +137,7 @@ export const CATEGORY_DESCRIPTIONS: Record<string, string> = {
  * When a request matches these categories, the user can activate spoofing
  * to return plausible but fake data instead of blocking.
  */
-export const SPOOFABLE_CATEGORIES = new Set(["fingerprinting", "location"]);
+export const SPOOFABLE_CATEGORIES = new Set(["fingerprinting", "location", "pii"]);
 
 /**
  * Maximum body preview length to store (security constraint from Section 12).

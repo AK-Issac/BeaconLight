@@ -59,7 +59,7 @@ function extractDomain(url: string): string {
 
   const parts = hostname.split('.');
   if (parts.length <= 2) return hostname;
-  
+
   const secondLevel = parts[parts.length - 2];
   if (['co', 'com', 'org', 'net', 'edu', 'gov', 'mil', 'ac'].includes(secondLevel)) {
     return parts.slice(-3).join('.');
@@ -108,6 +108,40 @@ function classifyHeuristic(url: string, bodyPreview: string | null): Category {
 }
 
 /**
+ * High-confidence scanner for GET requests without a body.
+ * Prevents log pollution while reliably catching extension probing & query trackers.
+ */
+function classifyStrictGet(url: string): Category {
+  // 1. Extension probing (e.g. BrowserGate attacks probing for installed extensions)
+  if (
+    url.startsWith("chrome-extension://") ||
+    url.startsWith("moz-extension://") ||
+    /installed[_-]?extensions|addon[_-]?detect|plugin[_-]?detect/i.test(url)
+  ) {
+    return "extension-probe";
+  }
+
+  // 2. Query string parameters carrying location or PII
+  const qIndex = url.indexOf("?");
+  if (qIndex !== -1) {
+    const query = url.slice(qIndex + 1);
+    if (/(?:^|[&?])(lat|lng|latitude|longitude|geo_loc|ip_location)=/i.test(query)) {
+      return "location";
+    }
+    if (/(?:^|[&?])(email|phone|first_name|last_name|ssn)=/i.test(query)) {
+      return "pii";
+    }
+  }
+
+  // 3. Explicit fingerprint collection endpoints
+  if (/(?:canvas|webgl|audiocontext)[_-]?(fingerprint|fp|detect|collect)/i.test(url) || /toDataURL/i.test(url)) {
+    return "fingerprinting";
+  }
+
+  return null;
+}
+
+/**
  * Full classification: returns { category, severity, tier, spoofable, plainDescription }
  */
 function classifyRequest(
@@ -135,27 +169,39 @@ function classifyRequest(
     };
   }
 
-  // Reduce False Positives: Skip heuristic checks for standard asset requests.
-  // Only execute heuristics on POST/PUT requests or requests containing an actual payload/body.
+  // Reduce False Positives: Skip standard static asset files
   const isAsset = /\.(css|js|png|jpg|jpeg|gif|svg|woff|woff2|ico)$/i.test(url.split('?')[0]);
+  if (isAsset) {
+    return {
+      category: null,
+      severity: "neutral",
+      tier: 2,
+      spoofable: false,
+      plainDescription: "Standard request — static asset.",
+      isAutoBlocked: false,
+    };
+  }
+
   const isPostOrPut = method.toUpperCase() === "POST" || method.toUpperCase() === "PUT";
   const hasPayload = bodyPreview !== null && bodyPreview.trim().length > 0;
-  
-  if (!isAsset && (isPostOrPut || hasPayload)) {
-    // Tier 2: Heuristic classification
-    const heuristicCategory = classifyHeuristic(url, bodyPreview);
-    if (heuristicCategory) {
-      return {
-        category: heuristicCategory,
-        severity: "flagged",
-        tier: 2,
-        spoofable: SPOOFABLE_CATEGORIES.has(heuristicCategory),
-        plainDescription:
-          CATEGORY_DESCRIPTIONS[heuristicCategory] ||
-          "Suspicious tracking behavior detected.",
-        isAutoBlocked: false,
-      };
-    }
+
+  // Tier 2: Run full heuristics on POST/PUT or requests with a payload;
+  // use strict high-confidence scanning on GET requests.
+  const heuristicCategory = (isPostOrPut || hasPayload)
+    ? classifyHeuristic(url, bodyPreview)
+    : classifyStrictGet(url);
+
+  if (heuristicCategory) {
+    return {
+      category: heuristicCategory,
+      severity: "flagged",
+      tier: 2,
+      spoofable: SPOOFABLE_CATEGORIES.has(heuristicCategory),
+      plainDescription:
+        CATEGORY_DESCRIPTIONS[heuristicCategory] ||
+        "Suspicious tracking behavior detected.",
+      isAutoBlocked: false,
+    };
   }
 
   // Neutral: no classification match
@@ -334,9 +380,9 @@ async function processRequest(
     // Tab might be gone
   }
 
-  if (partyContext === "1st-party" && classification.severity === "flagged") {
-    classification.severity = "neutral";
-  }
+  //if (partyContext === "1st-party" && classification.severity === "flagged") {
+  //  classification.severity = "neutral";
+  //}
 
   // Check if this domain was manually blocked
   const stored = await ext.storage.local.get("blockedDomains");
@@ -429,9 +475,20 @@ ext.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     case "GET_TAB_LOG": {
       const requestedTabId = message.payload.tabId;
-      const logs = tabLogs.get(requestedTabId) || [];
-      sendResponse({ type: "TAB_LOG_RESPONSE", payload: { logs } });
-      return true; // async response
+      let logs = tabLogs.get(requestedTabId);
+
+      // If in-memory is empty (e.g. SW woke from sleep), check storage.session
+      if (!logs && hasSessionStorage()) {
+        ext.storage.session.get(`tabLog_${requestedTabId}`).then((stored) => {
+          const restoredLogs = (stored[`tabLog_${requestedTabId}`] as RequestLog[]) || [];
+          tabLogs.set(requestedTabId, restoredLogs);
+          sendResponse({ type: "TAB_LOG_RESPONSE", payload: { logs: restoredLogs } });
+        });
+        return true; // async
+      }
+
+      sendResponse({ type: "TAB_LOG_RESPONSE", payload: { logs: logs || [] } });
+      return true;
     }
 
     case "BLOCK_DOMAIN": {
@@ -581,7 +638,7 @@ ext.tabs.onUpdated.addListener((tabId, changeInfo) => {
     if (hasSessionStorage()) {
       ext.storage.session.remove(`tabLog_${tabId}`);
     }
-    
+
     // Notify the popup to clear its UI
     const port = connectedPorts.get(tabId);
     if (port) {
@@ -591,7 +648,7 @@ ext.tabs.onUpdated.addListener((tabId, changeInfo) => {
         connectedPorts.delete(tabId);
       }
     }
-    
+
     console.log(`[BeaconLight] Cleared logs for tab ${tabId} on navigation.`);
   }
 });
