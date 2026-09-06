@@ -96,6 +96,30 @@ button:focus-visible {
   pointer-events: none;
 }
 
+.request-separator {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 12px 0 8px;
+  color: #7d8a9a;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+}
+
+.request-separator::before,
+.request-separator::after {
+  content: "";
+  height: 1px;
+  flex: 1;
+  background: linear-gradient(to right, transparent, rgba(125, 138, 154, 0.8), transparent);
+}
+
+.request-separator span {
+  white-space: nowrap;
+}
+
 /* ─────────────────────────────────────────────
    Header
 ───────────────────────────────────────────── */

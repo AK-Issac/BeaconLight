@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+﻿import { useState, useEffect, useCallback, useRef, useMemo, Fragment } from "react";
 import type { RequestLog, Category } from "../types";
 import { ext, sendMessage } from "../browserApi";
 import { createPreviewLogs, isPreviewMode } from "./previewData";
@@ -509,6 +509,9 @@ export function Popup() {
       return 0;
     });
   }, [filteredLogs]);
+  const hasFlaggedGroups = groupedLogs.some(([, logs]) =>
+    logs.some((log) => log.severity === "flagged" || log.isBlocked || log.isAutoBlocked)
+  );
 
   const mascotMood = deriveMascotMood(
     isMasterActive,
@@ -641,17 +644,40 @@ export function Popup() {
               )}
             </div>
           ) : (
-            groupedLogs.map(([domain, logs]) => (
-              <DomainGroup
-                key={domain}
-                domain={domain}
-                logs={logs}
-                onBlock={handleBlock}
-                onUnblock={handleUnblock}
-                onSpoof={handleSpoof}
-                onRequestOverride={handleRequestOverride}
-              />
-            ))
+            groupedLogs.map(([domain, logs], index) => {
+              const isBadGroup =
+                logs.some((log) => log.severity === "flagged" || log.isBlocked || log.isAutoBlocked);
+
+              const showDivider =
+                hasFlaggedGroups &&
+                !isBadGroup &&
+                groupedLogs
+                  .slice(0, index)
+                  .some(([, prevLogs]) =>
+                    prevLogs.some(
+                      (log) => log.severity === "flagged" || log.isBlocked || log.isAutoBlocked
+                    )
+                  );
+
+              return (
+                <Fragment key={domain}>
+                  {showDivider && (
+                    <div className="request-separator">
+                      <span>neutral traffic</span>
+                    </div>
+                  )}
+
+                  <DomainGroup
+                    domain={domain}
+                    logs={logs}
+                    onBlock={handleBlock}
+                    onUnblock={handleUnblock}
+                    onSpoof={handleSpoof}
+                    onRequestOverride={handleRequestOverride}
+                  />
+                </Fragment>
+              );
+            })
           )}
         </div>
         {isMasterActive && groupedLogs.length > 0 && (
