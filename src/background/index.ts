@@ -531,9 +531,13 @@ ext.runtime.onConnect.addListener((port) => {
 // Lifecycle: Install & Startup
 // ============================================================================
 async function setupSidePanelBehavior() {
-  if (!hasSidePanel() || prefersToolbarPopup()) return;
   try {
-    await ext.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
+    if (!hasSidePanel()) return;
+    // Opera GX / Firefox: keep the toolbar popup. Chrome side panel
+    // on action click swallows default_popup and often opens empty.
+    await ext.sidePanel.setPanelBehavior({
+      openPanelOnActionClick: !prefersToolbarPopup(),
+    });
   } catch (error) {
     console.warn("[BeaconLight] sidePanel unavailable, using popup/sidebar fallback.", error);
   }

@@ -31,10 +31,6 @@
   "side_panel": {
     "default_path": "index.html"
   },
-  "sidebar_action": {
-    "default_title": "BeaconLight",
-    "default_panel": "index.html"
-  },
   "web_accessible_resources": [
     {
       "resources": ["assets/inject.js"],
