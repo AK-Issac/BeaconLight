@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+﻿import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import type { RequestLog, Category } from "../types";
 import { ext, sendMessage } from "../browserApi";
 import { createPreviewLogs, isPreviewMode } from "./previewData";
@@ -66,7 +66,7 @@ function ExplainButton({
         </button>
       )}
       {state === "loading" && (
-        <span className="explain-loading">⏳ analyzing…</span>
+        <span className="explain-loading">Analyzing payload &amp; request semantics...</span>
       )}
       {state === "done" && result && (
         <div className="explain-card">
@@ -549,3 +549,4 @@ return 0;
     </div>
   );
 }
+
