@@ -4,6 +4,7 @@ import { ext, sendMessage } from "../browserApi";
 import { createPreviewLogs, isPreviewMode } from "./previewData";
 import { explainRequestLocally } from "../utils/aiExplainer";
 import type { ExplainResult } from "../utils/aiExplainer";
+import { deriveMascotMood, useMascotSrc, RoamingMascot, Mascot } from "./Mascot";
 
 type FilterMode = "all" | "flagged" | "blocked" | "spoofed";
 
@@ -272,6 +273,7 @@ export function Popup() {
   const [activeTabId, setActiveTabId] = useState<number | null>(preview ? 1 : null);
   const portRef = useRef<chrome.runtime.Port | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const shellRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (preview || !ext?.tabs?.query) return;
@@ -328,7 +330,7 @@ export function Popup() {
     );
 
     const port = ext.runtime.connect({
-      name: `beaconlight-popup-${activeTabId}`,
+      name: `spotlight-popup-${activeTabId}`,
     });
     portRef.current = port;
 
@@ -427,6 +429,9 @@ export function Popup() {
   const totalRequests = requestLogs.length;
   const flaggedCount = requestLogs.filter((l) => l.severity === "flagged").length;
   const blockedCount = requestLogs.filter((l) => l.isBlocked || l.isAutoBlocked).length;
+  const openFlaggedCount = requestLogs.filter(
+    (l) => l.severity === "flagged" && !l.isBlocked && !l.isAutoBlocked
+  ).length;
 
 
   const filteredLogs = requestLogs.filter((log) => {
@@ -462,15 +467,27 @@ export function Popup() {
     });
   }, [filteredLogs]);
 
+  const mascotMood = deriveMascotMood(
+    isMasterActive,
+    openFlaggedCount,
+    groupedLogs.length
+  );
+  const mascotSrc = useMascotSrc(mascotMood);
+
   return (
-    <div className="terminal-container" id="beaconlight-root">
+    <div className="terminal-container" id="spotlight-root">
       <header className="terminal-header">
         <div className="window-controls" aria-hidden="true">
           <span className="control red" />
           <span className="control yellow" />
           <span className="control green" />
         </div>
-        <h1 className="terminal-title">user@beaconlight: ~</h1>
+        <img
+          className="header-logo"
+          src={ext?.runtime?.getURL?.("icons/icon128.png") ?? "/icons/icon128.png"}
+          alt="SpotLight"
+        />
+        <h1 className="terminal-title">user@spotlight: ~</h1>
         <span className={`token-counter ${flaggedCount > 0 ? "warning" : ""}`}>
           {flaggedCount} FLAG
         </span>
@@ -539,51 +556,67 @@ export function Popup() {
         ))}
       </div>
 
-      <div className="console-output" ref={listRef} id="request-list">
-        {!isMasterActive ? (
-          <div className="log-entry system">
-            <span className="log-method">$ guard --pause</span>
-            <span className="cursor" />
-            <span className="empty-title">MONITORING PAUSED</span>
-            <span className="empty-sub">
-              Hit RUN or GUARD ON to watch what this page sends about you.
-            </span>
-          </div>
-        ) : groupedLogs.length === 0 ? (
-          <div className="log-entry system">
-            <span className="log-method">$ tail -f requests</span>
-            <span className="cursor" />
-            <span className="empty-title">
-              {filter === "all" ? "WAITING FOR TRAFFIC" : `NO ${filter.toUpperCase()} REQUESTS`}
-            </span>
-            <span className="empty-sub">
-              {filter === "all"
-                ? "If this tab was already open, reload it to inspect its traffic."
-                : "Try another tab, or keep browsing."}
-            </span>
-            {filter === "all" && activeTabId && (
-              <button
-                className="btn-approve"
-                style={{ marginTop: "10px", padding: "5px 12px", width: "fit-content", fontSize: "11px" }}
-                onClick={() => {
-                  ext.tabs?.reload?.(activeTabId);
-                }}
-              >
-                [RELOAD TAB TO INSPECT]
-              </button>
-            )}
-          </div>
-        ) : (
-          groupedLogs.map(([domain, logs]) => (
-            <DomainGroup
-              key={domain}
-              domain={domain}
-              logs={logs}
-              onBlock={handleBlock}
-              onUnblock={handleUnblock}
-              onSpoof={handleSpoof}
-            />
-          ))
+      <div className="console-shell" ref={shellRef}>
+        <div className="console-output" ref={listRef} id="request-list">
+          {!isMasterActive ? (
+            <div className="log-entry system">
+              <Mascot src={mascotSrc} size="hero" mood={mascotMood} />
+              <div className="empty-cmd">
+                <span className="log-method">$ guard --pause</span>
+                <span className="cursor" />
+              </div>
+              <span className="empty-title">MONITORING PAUSED</span>
+              <span className="empty-sub">
+                Hit RUN or GUARD ON to watch what this page sends about you.
+              </span>
+            </div>
+          ) : groupedLogs.length === 0 ? (
+            <div className="log-entry system">
+              <Mascot src={mascotSrc} size="hero" mood={mascotMood} />
+              <div className="empty-cmd">
+                <span className="log-method">$ tail -f requests</span>
+                <span className="cursor" />
+              </div>
+              <span className="empty-title">
+                {filter === "all" ? "WAITING FOR TRAFFIC" : `NO ${filter.toUpperCase()} REQUESTS`}
+              </span>
+              <span className="empty-sub">
+                {filter === "all"
+                  ? "If this tab was already open, reload it to inspect its traffic."
+                  : "Try another tab, or keep browsing."}
+              </span>
+              {filter === "all" && activeTabId && (
+                <button
+                  className="btn-approve"
+                  style={{ marginTop: "10px", padding: "5px 12px", width: "fit-content", fontSize: "11px" }}
+                  onClick={() => {
+                    ext.tabs?.reload?.(activeTabId);
+                  }}
+                >
+                  [RELOAD TAB TO INSPECT]
+                </button>
+              )}
+            </div>
+          ) : (
+            groupedLogs.map(([domain, logs]) => (
+              <DomainGroup
+                key={domain}
+                domain={domain}
+                logs={logs}
+                onBlock={handleBlock}
+                onUnblock={handleUnblock}
+                onSpoof={handleSpoof}
+              />
+            ))
+          )}
+        </div>
+        {isMasterActive && groupedLogs.length > 0 && (
+          <RoamingMascot
+            src={mascotSrc}
+            mood={mascotMood}
+            shellRef={shellRef}
+            listRef={listRef}
+          />
         )}
       </div>
 
@@ -600,7 +633,7 @@ export function Popup() {
               const url = URL.createObjectURL(blob);
               const a = document.createElement("a");
               a.href = url;
-              a.download = `beaconlight-session-${Date.now()}.json`;
+              a.download = `spotlight-session-${Date.now()}.json`;
               a.click();
               URL.revokeObjectURL(url);
             }}

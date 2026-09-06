@@ -1,5 +1,5 @@
 // ============================================================================
-// BeaconLight — Cross-browser WebExtension API adapter
+// SpotLight — Cross-browser WebExtension API adapter
 // Chrome, Edge, Brave, Opera GX, Firefox, and Safari Web Extensions all
 // expose either `chrome` or `browser`. Prefer `chrome` (callback + promise
 // compatible) and fall back to `browser`.
@@ -26,7 +26,7 @@ export function hasSessionStorage(): boolean {
   return typeof ext?.storage?.session?.set === "function";
 }
 
-/** Opera GX and Firefox should use the toolbar popup, not Chrome's side panel. */
+/** Opera GX and Firefox cannot dock Chrome's right-hand side panel. */
 export function prefersToolbarPopup(): boolean {
   const g = globalThis as typeof globalThis & { opr?: unknown; opera?: unknown };
   if (g.opr || g.opera) return true;

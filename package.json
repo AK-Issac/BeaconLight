@@ -1,7 +1,7 @@
 {
-  "name": "beaconlight-extension",
+  "name": "spotlight-extension",
   "version": "1.0.0",
-  "description": "BeaconLight — Application-Level Privacy Inspector Chrome Extension",
+  "description": "SpotLight — Application-Level Privacy Inspector Chrome Extension",
   "private": true,
   "type": "module",
   "scripts": {

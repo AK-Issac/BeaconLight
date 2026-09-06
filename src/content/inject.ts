@@ -1,5 +1,5 @@
 // ============================================================================
-// BeaconLight — inject.ts
+// SpotLight — inject.ts
 // Runs in PAGE CONTEXT (not content script isolated world).
 // Patches fetch/XHR for observational interception and applies fingerprint/
 // geolocation spoofing when enabled. Communicates via window.postMessage.
@@ -8,8 +8,9 @@
 (function () {
   "use strict";
 
-  const BEACONLIGHT_MSG_SOURCE = "__beaconlight_inject__";
+  const SPOTLIGHT_MSG_SOURCE = "__spotlight_inject__";
   const MAX_BODY_PREVIEW = 2000;
+  let spoofActive = Boolean((window as any).__spotlightSpoofEnabled);
 
   // ========================================================================
   // Helper: Serialize request body to a preview string
@@ -52,7 +53,7 @@
   ) {
     window.postMessage(
       {
-        source: BEACONLIGHT_MSG_SOURCE,
+        source: SPOTLIGHT_MSG_SOURCE,
         type: "OBSERVED_REQUEST",
         payload: {
           url,
@@ -126,16 +127,16 @@
     url: string | URL,
     ...rest: any[]
   ) {
-    (this as any).__beaconlight_method = method;
-    (this as any).__beaconlight_url =
+    (this as any).__spotlight_method = method;
+    (this as any).__spotlight_url =
       url instanceof URL ? url.href : String(url);
     return originalXHROpen.apply(this, [method, url, ...rest] as any);
   };
 
   XMLHttpRequest.prototype.send = function (body?: Document | XMLHttpRequestBodyInit | null) {
     try {
-      const url = (this as any).__beaconlight_url || "";
-      const method = ((this as any).__beaconlight_method || "GET").toUpperCase();
+      const url = (this as any).__spotlight_url || "";
+      const method = ((this as any).__spotlight_method || "GET").toUpperCase();
       const bodyPreview = serializeBody(body);
       reportRequest(url, method, bodyPreview);
     } catch {
@@ -149,20 +150,15 @@
   // CRITICAL: All spoofed data must be syntactically valid to prevent
   // breaking the web page. See spec Section 7.3.
   // ========================================================================
-  // Track spoof state
-  let spoofActive = Boolean((window as any).__beaconlightSpoofEnabled);
-
-  // If already enabled at startup, apply immediately
   if (spoofActive) {
     applyBrowserSpoofing();
   }
 
-  // Listen for the user clicking "Spoof" in the popup mid-session
   window.addEventListener("message", (event) => {
     if (event.source !== window || !event.data) return;
-    if (event.data.source === BEACONLIGHT_MSG_SOURCE && event.data.type === "SET_SPOOF_STATE") {
+    if (event.data.source === SPOTLIGHT_MSG_SOURCE && event.data.type === "SET_SPOOF_STATE") {
       spoofActive = Boolean(event.data.enabled);
-      (window as any).__beaconlightSpoofEnabled = spoofActive;
+      (window as any).__spotlightSpoofEnabled = spoofActive;
       if (spoofActive) {
         applyBrowserSpoofing();
       }
@@ -170,6 +166,7 @@
   });
 
   function applyBrowserSpoofing() {
+    // --- Navigator / UA spoofing ---
     try {
       Object.defineProperty(navigator, "userAgent", {
         get: () =>
@@ -330,7 +327,7 @@
     // Notify that spoofing was applied
     window.postMessage(
       {
-        source: BEACONLIGHT_MSG_SOURCE,
+        source: SPOTLIGHT_MSG_SOURCE,
         type: "SPOOF_APPLIED",
       },
       "*"

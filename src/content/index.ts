@@ -1,5 +1,5 @@
 // ============================================================================
-// BeaconLight — Content Script (index.ts)
+// SpotLight — Content Script (index.ts)
 // Runs at document_start in the ISOLATED content script world.
 // Responsibilities:
 //   1. Inject inject.ts into the page context (MAIN world)
@@ -9,7 +9,7 @@
 
 import { ext, sendMessage } from "../browserApi";
 
-const BEACONLIGHT_MSG_SOURCE = "__beaconlight_inject__";
+const SPOTLIGHT_MSG_SOURCE = "__spotlight_inject__";
 
 /**
  * Inject the inject.ts bundle into the page's MAIN world.
@@ -23,7 +23,7 @@ function injectPageScript(spoofEnabled: boolean) {
   // First, set the spoof flag in the page context if needed
   if (spoofEnabled) {
     const flagScript = document.createElement("script");
-    flagScript.textContent = `window.__beaconlightSpoofEnabled = true;`;
+    flagScript.textContent = `window.__spotlightSpoofEnabled = true;`;
     (document.documentElement || document.head || document.body).prepend(
       flagScript
     );
@@ -45,7 +45,7 @@ function injectPageScript(spoofEnabled: boolean) {
 window.addEventListener("message", (event) => {
   // Only accept messages from our own window (same origin)
   if (event.source !== window) return;
-  if (!event.data || event.data.source !== BEACONLIGHT_MSG_SOURCE) return;
+  if (!event.data || event.data.source !== SPOTLIGHT_MSG_SOURCE) return;
 
   if (event.data.type === "OBSERVED_REQUEST") {
     // Relay the observed request to the background service worker
@@ -64,7 +64,7 @@ ext.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message.type === "SPOOF_TOGGLE") {
     window.postMessage(
       {
-        source: BEACONLIGHT_MSG_SOURCE,
+        source: SPOTLIGHT_MSG_SOURCE,
         type: "SET_SPOOF_STATE",
         enabled: message.payload.enabled,
       },

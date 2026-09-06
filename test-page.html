@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>BeaconLight — Test Page</title>
+  <title>SpotLight — Test Page</title>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
@@ -145,8 +145,8 @@
   </style>
 </head>
 <body>
-  <h1>🔦 BeaconLight Test Page</h1>
-  <p class="subtitle">Each button triggers a specific classification category. Open the BeaconLight popup to see requests appear in real time.</p>
+  <h1>🔦 SpotLight Test Page</h1>
+  <p class="subtitle">Each button triggers a specific classification category. Open the SpotLight popup to see requests appear in real time.</p>
 
   <div class="test-grid">
 
@@ -299,9 +299,9 @@
         ctx.fillStyle = '#f60';
         ctx.fillRect(125, 1, 62, 20);
         ctx.fillStyle = '#069';
-        ctx.fillText('BeaconLight FP Test 🔦', 2, 15);
+        ctx.fillText('SpotLight FP Test 🔦', 2, 15);
         ctx.fillStyle = 'rgba(102, 204, 0, 0.7)';
-        ctx.fillText('BeaconLight FP Test 🔦', 4, 17);
+        ctx.fillText('SpotLight FP Test 🔦', 4, 17);
       }
 
       const dataUrl = canvas.toDataURL();
@@ -472,7 +472,7 @@
 
       try {
         // Using a well-known benign API
-        await fetch('https://httpbin.org/get?demo=beaconlight');
+        await fetch('https://httpbin.org/get?demo=spotlight');
         log('Neutral request sent to httpbin.org');
       } catch (e) {
         log('Neutral request sent (may fail due to CORS — this is expected)');
