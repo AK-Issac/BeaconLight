@@ -18,10 +18,10 @@
 
 html,
 body {
-  width: 400px;
-  min-width: 400px;
-  height: 600px;
-  min-height: 600px;
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  min-height: 100%;
   margin: 0;
   padding: 0;
   background-color: var(--terminal-bg);
@@ -29,6 +29,7 @@ body {
 }
 
 @media (min-height: 620px) {
+
   html,
   body {
     width: 100%;
@@ -52,8 +53,9 @@ button:focus-visible {
 ───────────────────────────────────────────── */
 .terminal-container {
   width: 100%;
-  height: 600px;
-  min-height: 600px;
+  height: 100%;
+  min-height: 0;
+  max-height: 100vh;
   background-color: var(--terminal-bg);
   color: var(--terminal-green);
   font-family: var(--terminal-font);
@@ -77,12 +79,10 @@ button:focus-visible {
   inset: 0;
   background:
     linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.1) 50%),
-    linear-gradient(
-      90deg,
+    linear-gradient(90deg,
       rgba(255, 0, 0, 0.03),
       rgba(0, 255, 0, 0.01),
-      rgba(0, 0, 255, 0.03)
-    );
+      rgba(0, 0, 255, 0.03));
   z-index: 10;
   background-size: 100% 3px, 3px 100%;
   pointer-events: none;
@@ -108,17 +108,21 @@ button:focus-visible {
   gap: 6px;
   margin-right: 5px;
 }
+
 .control {
   width: 10px;
   height: 10px;
   border-radius: 50%;
 }
+
 .red {
   background-color: #ff5f56;
 }
+
 .yellow {
   background-color: #ffbd2e;
 }
+
 .green {
   background-color: #27c93f;
 }
@@ -142,6 +146,7 @@ button:focus-visible {
   margin-left: 10px;
   white-space: nowrap;
 }
+
 .token-counter.warning {
   color: var(--terminal-warn);
   text-shadow: 0 0 5px rgba(255, 189, 46, 0.3);
@@ -162,6 +167,7 @@ button:focus-visible {
   transition: all 0.15s ease;
   white-space: nowrap;
 }
+
 .stop-button:hover {
   background: var(--terminal-red);
   color: #000;
@@ -172,6 +178,7 @@ button:focus-visible {
   border-color: var(--terminal-green);
   color: var(--terminal-green);
 }
+
 .stop-button.run:hover {
   background: var(--terminal-green);
   color: #000;
@@ -207,15 +214,18 @@ button:focus-visible {
   cursor: pointer;
   transition: all 0.15s ease;
 }
+
 .mode-btn:hover:not(:disabled) {
   border-color: var(--terminal-green-dim);
   color: var(--terminal-green-dim);
 }
+
 .mode-btn.mode-active {
   border-color: var(--terminal-green);
   color: var(--terminal-green);
   box-shadow: 0 0 8px rgba(0, 255, 65, 0.15);
 }
+
 .mode-btn:disabled {
   opacity: 0.4;
   cursor: not-allowed;
@@ -238,6 +248,7 @@ button:focus-visible {
   padding: 8px 10px;
   transition: border-color 0.3s ease, box-shadow 0.3s ease;
 }
+
 .stat-box:hover {
   border-color: var(--terminal-green);
   box-shadow: 0 0 10px rgba(0, 255, 65, 0.2);
@@ -250,13 +261,16 @@ button:focus-visible {
   color: var(--terminal-green);
   line-height: 1.2;
 }
+
 .stat-box--flag .stat-box__value {
   color: var(--terminal-red);
 }
+
 .stat-box--block .stat-box__value {
   color: var(--terminal-warn);
   text-shadow: 0 0 5px rgba(255, 189, 46, 0.3);
 }
+
 .stat-box__label {
   display: block;
   margin-top: 4px;
@@ -313,6 +327,7 @@ button:focus-visible {
   border-radius: 0;
   padding: 12px;
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   font-size: 12px;
   line-height: 1.5;
@@ -321,9 +336,11 @@ button:focus-visible {
   position: relative;
   z-index: 1;
 }
+
 .console-output::-webkit-scrollbar {
   width: 6px;
 }
+
 .console-output::-webkit-scrollbar-thumb {
   background-color: var(--terminal-green-dim);
   border-radius: 3px;
@@ -339,13 +356,16 @@ button:focus-visible {
   animation: panel-in 0.2s ease;
   color: var(--terminal-green);
 }
+
 .log-entry.flagged {
   border-color: var(--terminal-red);
   background: rgba(255, 62, 62, 0.04);
 }
+
 .log-entry.blocked {
   opacity: 0.75;
 }
+
 .log-entry.system {
   color: #888;
   border: 0;
@@ -358,6 +378,7 @@ button:focus-visible {
     opacity: 0;
     transform: translateY(-4px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -414,24 +435,29 @@ button:focus-visible {
   color: var(--terminal-green-dim);
   border-radius: 3px;
 }
+
 .badge.tracker,
 .badge.pii {
   border-color: var(--terminal-red);
   color: var(--terminal-red);
 }
+
 .badge.location {
   border-color: var(--terminal-warn);
   color: var(--terminal-warn);
 }
+
 .badge.fingerprint,
 .badge.extension-probe {
   border-color: var(--terminal-blue);
   color: var(--terminal-blue);
 }
+
 .badge.blocked {
   border-color: #555;
   color: #888;
 }
+
 .badge.spoofed {
   border-color: var(--terminal-green);
   color: var(--terminal-green);
@@ -455,21 +481,25 @@ button:focus-visible {
   cursor: pointer;
   transition: all 0.15s ease;
 }
+
 .btn-approve {
   background: transparent;
   border: 1px solid var(--terminal-green);
   color: var(--terminal-green);
 }
+
 .btn-approve:hover {
   background: var(--terminal-green);
   color: #000;
   box-shadow: 0 0 12px rgba(0, 255, 65, 0.4);
 }
+
 .btn-abort {
   background: transparent;
   border: 1px solid var(--terminal-red);
   color: var(--terminal-red);
 }
+
 .btn-abort:hover {
   background: var(--terminal-red);
   color: #000;
@@ -507,10 +537,12 @@ button:focus-visible {
   margin-bottom: 4px;
   font-size: 11px;
 }
+
 .log-method {
   color: var(--terminal-blue);
   font-weight: bold;
 }
+
 .log-time {
   color: #888;
 }
@@ -539,6 +571,7 @@ button:focus-visible {
   font-weight: bold;
   margin: 8px 0 4px;
 }
+
 .empty-sub {
   display: block;
   color: #888;
@@ -559,10 +592,12 @@ button:focus-visible {
 }
 
 @keyframes blink {
+
   from,
   to {
     opacity: 1;
   }
+
   50% {
     opacity: 0;
   }
@@ -589,6 +624,7 @@ button:focus-visible {
 .footer-live {
   color: var(--terminal-green-dim);
 }
+
 .footer-live.on {
   color: var(--terminal-green);
 }
@@ -613,6 +649,7 @@ button:focus-visible {
   cursor: pointer;
   transition: all 0.15s ease;
 }
+
 .btn-explain:hover {
   border-color: var(--terminal-green);
   color: var(--terminal-green);
@@ -627,8 +664,15 @@ button:focus-visible {
 }
 
 @keyframes explain-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.4;
+  }
 }
 
 .explain-card {
@@ -680,6 +724,7 @@ button:focus-visible {
   line-height: 1;
   transition: color 0.15s;
 }
+
 .explain-dismiss:hover {
   color: var(--terminal-green);
 }
