@@ -583,3 +583,102 @@ button:focus-visible {
 .footer-live.on {
   color: var(--terminal-green);
 }
+
+/* ─────────────────────────────────────────────
+   On-Device AI Explainer
+───────────────────────────────────────────── */
+.explain-wrapper {
+  margin-top: 8px;
+}
+
+.btn-explain {
+  background: transparent;
+  border: 1px dashed var(--terminal-green-dim);
+  color: var(--terminal-green-dim);
+  font-family: var(--terminal-font);
+  font-size: 10px;
+  font-weight: bold;
+  letter-spacing: 1px;
+  padding: 3px 8px;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.btn-explain:hover {
+  border-color: var(--terminal-green);
+  color: var(--terminal-green);
+  box-shadow: 0 0 6px rgba(0, 255, 65, 0.2);
+}
+
+.explain-loading {
+  font-size: 10px;
+  color: var(--terminal-green-dim);
+  letter-spacing: 1px;
+  animation: explain-pulse 1s ease-in-out infinite;
+}
+
+@keyframes explain-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.explain-card {
+  margin-top: 6px;
+  border: 1px solid #1a7a3a;
+  border-radius: 4px;
+  background: rgba(0, 255, 65, 0.04);
+  padding: 10px 12px;
+  animation: panel-in 0.2s ease;
+}
+
+.explain-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.explain-badge {
+  font-size: 9px;
+  font-weight: bold;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border-radius: 3px;
+}
+
+/* Gemini Nano — green, AI glow */
+.explain-badge--nano {
+  border: 1px solid #1a7a3a;
+  color: #00c93a;
+  background: rgba(0, 201, 58, 0.1);
+}
+
+/* Heuristic fallback — blue/muted, clearly not AI */
+.explain-badge--heuristic {
+  border: 1px solid #005a8a;
+  color: var(--terminal-blue);
+  background: rgba(0, 210, 255, 0.07);
+}
+
+.explain-dismiss {
+  background: transparent;
+  border: none;
+  color: #555;
+  font-size: 11px;
+  cursor: pointer;
+  padding: 0 2px;
+  line-height: 1;
+  transition: color 0.15s;
+}
+.explain-dismiss:hover {
+  color: var(--terminal-green);
+}
+
+.explain-text {
+  font-size: 11px;
+  color: #b0ffca;
+  line-height: 1.6;
+  opacity: 0.95;
+  font-family: var(--terminal-font);
+}
