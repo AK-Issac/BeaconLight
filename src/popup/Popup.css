@@ -101,7 +101,7 @@ button:focus-visible {
   align-items: center;
   gap: 10px;
   margin: 12px 0 8px;
-  color: #7d8a9a;
+  color: var(--terminal-green);
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 1.5px;
@@ -113,7 +113,12 @@ button:focus-visible {
   content: "";
   height: 1px;
   flex: 1;
-  background: linear-gradient(to right, transparent, rgba(125, 138, 154, 0.8), transparent);
+  background: linear-gradient(
+    to right,
+    transparent,
+    rgba(0, 255, 65, 0.5),
+    transparent
+  );
 }
 
 .request-separator span {

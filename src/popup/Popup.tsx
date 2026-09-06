@@ -108,7 +108,7 @@ function DomainGroup({
 
   const isAutoBlocked = logs.some((l) => l.isAutoBlocked);
   const isDomainBlocked = logs.some(
-    (l) => l.isBlocked && (!l.overrideAction || logs.length === 1)
+    (l) => l.isBlocked && !l.overrideAction
   );
   const hasRequestOverrideBlock = logs.some((l) => l.overrideAction === "block");
   const hasFlagged = logs.some((l) => l.severity === "flagged");
@@ -252,18 +252,20 @@ function DomainGroup({
                 <div className="log-url" title={log.url}>
                   {log.url}
                 </div>
-                <div className="log-actions" style={{ marginTop: "10px" }}>
-                  <button
-                    type="button"
-                    className={log.overrideAction === "block" ? "btn-abort" : "btn-approve"}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onRequestOverride(log.tabId, log.id, log.overrideAction === "block" ? "allow" : "block");
-                    }}
-                  >
-                    {log.overrideAction === "block" ? "ALLOW REQUEST" : "BLOCK REQUEST"}
-                  </button>
-                </div>
+                {!isDomainBlocked && (
+                  <div className="log-actions" style={{ marginTop: "10px" }}>
+                    <button
+                      type="button"
+                      className={log.overrideAction === "block" ? "btn-approve" : "btn-abort"}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onRequestOverride(log.tabId, log.id, log.overrideAction === "block" ? "allow" : "block");
+                      }}
+                    >
+                      {log.overrideAction === "block" ? "ALLOW REQUEST" : "BLOCK REQUEST"}
+                    </button>
+                  </div>
+                )}
                 <ExplainButton
                   url={log.url}
                   method={log.method}
@@ -291,6 +293,21 @@ export function Popup() {
   const portRef = useRef<chrome.runtime.Port | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const shellRef = useRef<HTMLDivElement>(null);
+
+  const preserveScroll = useCallback((update: (prev: RequestLog[]) => RequestLog[]) => {
+    const node = listRef.current;
+    const previousScrollTop = node?.scrollTop ?? 0;
+
+    setRequestLogs((prev) => {
+      const next = update(prev);
+      requestAnimationFrame(() => {
+        if (node) {
+          node.scrollTop = previousScrollTop;
+        }
+      });
+      return next;
+    });
+  }, []);
 
   useEffect(() => {
     if (preview || !ext?.tabs?.query) return;
@@ -389,13 +406,13 @@ export function Popup() {
       if (!preview) {
         sendMessage({ type: "BLOCK_DOMAIN", payload: { domain } });
       }
-      setRequestLogs((prev) =>
+      preserveScroll((prev) =>
         prev.map((log) =>
           log.domain === domain ? { ...log, isBlocked: true } : log
         )
       );
     },
-    [preview]
+    [preview, preserveScroll]
   );
 
   const handleUnblock = useCallback(
@@ -403,13 +420,13 @@ export function Popup() {
       if (!preview) {
         sendMessage({ type: "UNBLOCK_DOMAIN", payload: { domain } });
       }
-      setRequestLogs((prev) =>
+      preserveScroll((prev) =>
         prev.map((log) =>
           log.domain === domain ? { ...log, isBlocked: false } : log
         )
       );
     },
-    [preview]
+    [preview, preserveScroll]
   );
 
   const handleSpoof = useCallback(
@@ -430,25 +447,28 @@ export function Popup() {
       if (!preview) {
         sendMessage({ type: "SET_REQUEST_OVERRIDE", payload: { tabId, requestId, action } });
       }
-      setRequestLogs((prev) =>
+      preserveScroll((prev) =>
         prev.map((log) => {
           if (log.id !== requestId) return log;
-          const nextIsBlocked = action === "block";
 
-          const singleRequestForDomain =
-            prev.filter((entry) => entry.domain === log.domain).length === 1;
+          const domainHasOtherBlockedEntries = prev.some(
+            (entry) =>
+              entry.domain === log.domain &&
+              entry.id !== log.id &&
+              entry.isBlocked &&
+              !entry.overrideAction
+          );
+
           return {
             ...log,
             overrideAction: action,
-          // do NOT toggle domain-wide isBlocked here
-          // request override is independent from domain block state
-          isBlocked: 
-            action === "block" && (!log.isAutoBlocked || singleRequestForDomain),
+            isBlocked:
+              action === "block" && !log.isAutoBlocked && !domainHasOtherBlockedEntries,
           };
         })
       );
     },
-    [preview]
+    [preview, preserveScroll]
   );
 
   const handleSpoofToggle = useCallback(() => {
@@ -502,14 +522,15 @@ export function Popup() {
       groups[log.domain].push(log);
     }
     return Object.entries(groups).sort(([, logsA], [, logsB]) => {
-      const aFlagged = logsA.some((l) => l.severity === "flagged");
-      const bFlagged = logsB.some((l) => l.severity === "flagged");
+      const aFlagged = logsA.some((l) => l.severity === "flagged" || l.isBlocked || l.isAutoBlocked);
+      const bFlagged = logsB.some((l) => l.severity === "flagged" || l.isBlocked || l.isAutoBlocked);
       if (aFlagged && !bFlagged) return -1;
       if (!aFlagged && bFlagged) return 1;
       return 0;
     });
   }, [filteredLogs]);
-  const hasFlaggedGroups = groupedLogs.some(([, logs]) =>
+
+  const hasBadGroups = groupedLogs.some(([, logs]) =>
     logs.some((log) => log.severity === "flagged" || log.isBlocked || log.isAutoBlocked)
   );
 
@@ -643,21 +664,20 @@ export function Popup() {
                 </button>
               )}
             </div>
-          ) : (
-            groupedLogs.map(([domain, logs], index) => {
+          ) : (() => {
+            let neutralDividerShown = false;
+            return groupedLogs.map(([domain, logs]) => {
               const isBadGroup =
                 logs.some((log) => log.severity === "flagged" || log.isBlocked || log.isAutoBlocked);
 
               const showDivider =
-                hasFlaggedGroups &&
+                hasBadGroups &&
                 !isBadGroup &&
-                groupedLogs
-                  .slice(0, index)
-                  .some(([, prevLogs]) =>
-                    prevLogs.some(
-                      (log) => log.severity === "flagged" || log.isBlocked || log.isAutoBlocked
-                    )
-                  );
+                !neutralDividerShown;
+
+              if (!isBadGroup) {
+                neutralDividerShown = true;
+              }
 
               return (
                 <Fragment key={domain}>
@@ -677,8 +697,8 @@ export function Popup() {
                   />
                 </Fragment>
               );
-            })
-          )}
+            });
+          })()}
         </div>
         {isMasterActive && groupedLogs.length > 0 && (
           <RoamingMascot
