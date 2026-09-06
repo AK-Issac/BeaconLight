@@ -1,9 +1,9 @@
-ï»¿// ============================================================================
-// BeaconLight â€” Local On-Device AI Explainer
+// ============================================================================
+// SpotLight — Local On-Device AI Explainer
 // 100% local-first. No external API calls.
 //
 // Tier 1: Chrome Built-in Gemini Nano (window.ai.languageModel)
-// Tier 2: Improved heuristic analysis â€” reads URL structure, path segments,
+// Tier 2: Improved heuristic analysis — reads URL structure, path segments,
 //         query parameters, and category signals.
 // ============================================================================
 
@@ -76,7 +76,7 @@ function explainWithHeuristics(url: string, method: string, category: string | n
     return (
       `${hostname} is probing your browser for installed extensions. ` +
       `By checking whether extension-specific resources load, websites can infer ` +
-      `which tools you use â€” a behavioural fingerprinting technique with no legitimate need.`
+      `which tools you use — a behavioural fingerprinting technique with no legitimate need.`
     );
   }
 
@@ -85,7 +85,7 @@ function explainWithHeuristics(url: string, method: string, category: string | n
     const scope = params.includes("scope") ? " with a specific permission scope" : "";
     return (
       `This ${method} request to ${hostname} is handling authentication${scope}. ` +
-      `It likely exchanges or refreshes credentials to maintain your logged-in state â€” ` +
+      `It likely exchanges or refreshes credentials to maintain your logged-in state — ` +
       `standard behaviour, but worth noting if the domain is unfamiliar.`
     );
   }
@@ -99,11 +99,11 @@ function explainWithHeuristics(url: string, method: string, category: string | n
       return (
         `This is a real-time ad-bidding signal sent to ${hostname}. ` +
         `It shares contextual page data and likely a user identifier so advertisers ` +
-        `can bid on showing you targeted ads â€” a core part of behavioural advertising infrastructure.`
+        `can bid on showing you targeted ads — a core part of behavioural advertising infrastructure.`
       );
     }
     return (
-      `This ${method} call to ${hostname} is transmitting usage telemetry â€” ` +
+      `This ${method} call to ${hostname} is transmitting usage telemetry — ` +
       `typically page interactions, timing data, or feature engagement metrics. ` +
       `It helps the site owner understand behaviour but also builds a record of your activity.`
     );
@@ -121,8 +121,8 @@ function explainWithHeuristics(url: string, method: string, category: string | n
   // -- Fingerprinting --------------------------------------------------------
   if (category === "fingerprinting") {
     return (
-      `This request is exfiltrating browser or hardware attributes â€” ` +
-      `such as screen resolution, GPU info, or audio stack characteristics â€” to ${hostname}. ` +
+      `This request is exfiltrating browser or hardware attributes — ` +
+      `such as screen resolution, GPU info, or audio stack characteristics — to ${hostname}. ` +
       `These signals are combined to create a device fingerprint that tracks you without cookies.`
     );
   }
@@ -138,8 +138,8 @@ function explainWithHeuristics(url: string, method: string, category: string | n
   // -- PII --------------------------------------------------------------------
   if (category === "pii") {
     return (
-      `The payload of this request contains what appears to be personally identifiable information â€” ` +
-      `possibly an email address, phone number, or name â€” being transmitted to ${hostname}.`
+      `The payload of this request contains what appears to be personally identifiable information — ` +
+      `possibly an email address, phone number, or name — being transmitted to ${hostname}.`
     );
   }
 
@@ -149,7 +149,7 @@ function explainWithHeuristics(url: string, method: string, category: string | n
     const ext = lastSeg.split(".").pop()?.toUpperCase() ?? "resource";
     return (
       `This is a ${ext} asset fetch from ${hostname}. ` +
-      `The browser is loading a static file needed to render the page â€” ` +
+      `The browser is loading a static file needed to render the page — ` +
       `no user data is being sent outbound.`
     );
   }
@@ -160,7 +160,7 @@ function explainWithHeuristics(url: string, method: string, category: string | n
     const paramSummary = params.length > 0 ? ` with parameters: ${params.slice(0, 4).join(", ")}` : "";
     return (
       `A ${method} data request to ${hostname}${paramSummary}. ` +
-      `This looks like a content or application API call â€” ` +
+      `This looks like a content or application API call — ` +
       `fetching or submitting structured data to power the page's dynamic functionality.`
     );
   }
@@ -169,7 +169,7 @@ function explainWithHeuristics(url: string, method: string, category: string | n
   const pathHint = pathParts.length > 0 ? ` (path: /${pathParts.slice(0, 2).join("/")})` : "";
   return (
     `A ${method} request to ${hostname}${pathHint}. ` +
-    `No specific tracking or risk signals were detected â€” ` +
+    `No specific tracking or risk signals were detected — ` +
     `this appears to be routine network activity for loading page content.`
   );
 }

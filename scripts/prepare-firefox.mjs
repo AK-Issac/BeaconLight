@@ -42,18 +42,18 @@ if (Array.isArray(manifest.web_accessible_resources)) {
 
 manifest.browser_specific_settings = {
   gecko: {
-    id: "beaconlight@beaconlight.local",
+    id: "spotlight@spotlight.local",
     strict_min_version: "121.0",
   },
 };
 
 manifest.sidebar_action = {
-  default_title: "BeaconLight",
+  default_title: "SpotLight",
   default_panel: "index.html",
 };
 
 if (!manifest.action) {
-  manifest.action = { default_title: "BeaconLight" };
+  manifest.action = { default_title: "SpotLight" };
 }
 manifest.action.default_popup = "index.html";
 

@@ -1,5 +1,5 @@
 // ============================================================================
-// BeaconLight — TypeScript Interfaces
+// SpotLight — TypeScript Interfaces
 // All shared types for messages, request logs, and internal state.
 // ============================================================================
 
@@ -140,7 +140,7 @@ export interface ClearLogMessage {
 }
 
 /** Union of all message types for type-safe message handling */
-export type BeaconLightMessage =
+export type SpotLightMessage =
   | ObservedRequestMessage
   | GetTabLogMessage
   | TabLogResponse

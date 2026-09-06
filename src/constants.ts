@@ -1,5 +1,5 @@
 // ============================================================================
-// BeaconLight — Constants
+// SpotLight — Constants
 // Known tracker domains (Tier 1) and heuristic classification patterns (Tier 2).
 // ============================================================================
 

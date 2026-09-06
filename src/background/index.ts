@@ -1,5 +1,5 @@
 // ============================================================================
-// BeaconLight — Background Service Worker (src/background/index.ts)
+// SpotLight — Background Service Worker (src/background/index.ts)
 // Single service worker file handling:
 //   - webRequest observation
 //   - Two-Tier classification engine
@@ -227,7 +227,7 @@ function classifyRequest(
 async function applyAutoBlockRules() {
   if (!hasDeclarativeNetRequest()) {
     console.warn(
-      "[BeaconLight] declarativeNetRequest is unavailable — observation still works, auto-block does not."
+      "[SpotLight] declarativeNetRequest is unavailable — observation still works, auto-block does not."
     );
     return;
   }
@@ -257,10 +257,10 @@ async function applyAutoBlockRules() {
       addRules: rules,
     });
     console.log(
-      `[BeaconLight] Auto-block rules applied for ${rules.length} known tracker domains.`
+      `[SpotLight] Auto-block rules applied for ${rules.length} known tracker domains.`
     );
   } catch (err) {
-    console.error("[BeaconLight] Failed to apply auto-block rules:", err);
+    console.error("[SpotLight] Failed to apply auto-block rules:", err);
   }
 }
 
@@ -305,9 +305,9 @@ async function blockDomain(domain: string) {
       }
     }
 
-    console.log(`[BeaconLight] Manually blocked domain: ${domain}`);
+    console.log(`[SpotLight] Manually blocked domain: ${domain}`);
   } catch (err) {
-    console.error(`[BeaconLight] Failed to block domain ${domain}:`, err);
+    console.error(`[SpotLight] Failed to block domain ${domain}:`, err);
   }
 }
 
@@ -344,9 +344,9 @@ async function unblockDomain(domain: string) {
       }
     }
 
-    console.log(`[BeaconLight] Unblocked domain: ${domain}`);
+    console.log(`[SpotLight] Unblocked domain: ${domain}`);
   } catch (err) {
-    console.error(`[BeaconLight] Failed to unblock domain ${domain}:`, err);
+    console.error(`[SpotLight] Failed to unblock domain ${domain}:`, err);
   }
 }
 
@@ -572,8 +572,8 @@ ext.runtime.onMessage.addListener((message, sender, sendResponse) => {
 // Port-based Live Updates (Popup ↔ Background)
 // ============================================================================
 ext.runtime.onConnect.addListener((port) => {
-  if (port.name.startsWith("beaconlight-popup-")) {
-    const portTabId = parseInt(port.name.replace("beaconlight-popup-", ""), 10);
+  if (port.name.startsWith("spotlight-popup-")) {
+    const portTabId = parseInt(port.name.replace("spotlight-popup-", ""), 10);
     if (!isNaN(portTabId)) {
       connectedPorts.set(portTabId, port);
 
@@ -589,19 +589,57 @@ ext.runtime.onConnect.addListener((port) => {
 // ============================================================================
 async function setupSidePanelBehavior() {
   try {
+    if (prefersToolbarPopup()) {
+      // Opera GX / Firefox: Chrome's sidePanel.open() opens a new tab instead
+      // of a docked panel. Keep the toolbar popup.
+      if (ext.action?.setPopup) {
+        await ext.action.setPopup({ popup: "index.html" });
+      }
+      if (hasSidePanel()) {
+        await ext.sidePanel.setPanelBehavior({ openPanelOnActionClick: false });
+      }
+      return;
+    }
+
     if (!hasSidePanel()) return;
-    // Opera GX / Firefox: keep the toolbar popup. Chrome side panel
-    // on action click swallows default_popup and often opens empty.
-    await ext.sidePanel.setPanelBehavior({
-      openPanelOnActionClick: !prefersToolbarPopup(),
-    });
+    await ext.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
+    if (typeof ext.sidePanel.setOptions === "function") {
+      await ext.sidePanel.setOptions({
+        path: "index.html",
+        enabled: true,
+      });
+    }
+    if (ext.action?.setPopup) {
+      await ext.action.setPopup({ popup: "" });
+    }
   } catch (error) {
-    console.warn("[BeaconLight] sidePanel unavailable, using popup/sidebar fallback.", error);
+    console.warn("[SpotLight] sidePanel unavailable, using popup/sidebar fallback.", error);
   }
 }
 
+function openSidePanelNow(tabId?: number, windowId?: number) {
+  if (prefersToolbarPopup()) return;
+  const sp = ext.sidePanel;
+  if (typeof sp?.open !== "function") return;
+  if (windowId != null) {
+    void sp.open({ windowId });
+    return;
+  }
+  if (tabId != null) {
+    void sp.open({ tabId });
+  }
+}
+
+if (ext.action?.onClicked) {
+  ext.action.onClicked.addListener((tab) => {
+    openSidePanelNow(tab.id, tab.windowId);
+  });
+}
+
+void setupSidePanelBehavior();
+
 ext.runtime.onInstalled.addListener(async () => {
-  console.log("[BeaconLight] Extension installed. Applying auto-block rules...");
+  console.log("[SpotLight] Extension installed. Applying auto-block rules...");
   await applyAutoBlockRules();
   await setupSidePanelBehavior();
 
@@ -612,7 +650,7 @@ ext.runtime.onInstalled.addListener(async () => {
 });
 
 ext.runtime.onStartup.addListener(async () => {
-  console.log("[BeaconLight] Browser started. Re-applying auto-block rules...");
+  console.log("[SpotLight] Browser started. Re-applying auto-block rules...");
   await applyAutoBlockRules();
   await setupSidePanelBehavior();
 
@@ -652,7 +690,6 @@ ext.tabs.onUpdated.addListener((tabId, changeInfo) => {
         connectedPorts.delete(tabId);
       }
     }
-
-    console.log(`[BeaconLight] Cleared logs for tab ${tabId} on navigation.`);
+    console.log(`[SpotLight] Cleared logs for tab ${tabId} on navigation.`);
   }
 });

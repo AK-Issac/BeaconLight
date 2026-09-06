@@ -18,24 +18,33 @@
 
 html,
 body {
-  width: 100%;
-  min-width: 0;
-  height: 100%;
-  min-height: 100%;
+  width: 400px;
+  min-width: 400px;
+  height: 600px;
+  min-height: 600px;
   margin: 0;
   padding: 0;
   background-color: var(--terminal-bg);
   overflow: hidden;
 }
 
-@media (min-height: 620px) {
+#root {
+  width: 100%;
+  height: 100%;
+}
 
+@media (min-height: 620px) {
   html,
   body {
     width: 100%;
-    min-width: 0;
+    min-width: 360px;
     height: 100%;
     min-height: 100%;
+  }
+
+  #root {
+    width: 100%;
+    height: 100%;
   }
 }
 
@@ -53,9 +62,8 @@ button:focus-visible {
 ───────────────────────────────────────────── */
 .terminal-container {
   width: 100%;
-  height: 100%;
-  min-height: 0;
-  max-height: 100vh;
+  height: 600px;
+  min-height: 600px;
   background-color: var(--terminal-bg);
   color: var(--terminal-green);
   font-family: var(--terminal-font);
@@ -122,9 +130,135 @@ button:focus-visible {
 .yellow {
   background-color: #ffbd2e;
 }
-
-.green {
+.green,
+.control.green {
   background-color: #27c93f;
+}
+
+.header-logo {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  border-radius: 3px;
+  object-fit: cover;
+  border: 1px solid var(--terminal-green-dim);
+}
+
+.mascot {
+  display: block;
+  object-fit: contain;
+  user-select: none;
+  pointer-events: none;
+  filter: drop-shadow(0 0 6px rgba(0, 255, 65, 0.28));
+}
+
+.mascot-hero {
+  margin: 0 auto 10px;
+}
+
+.mascot--hero {
+  width: 108px;
+  height: 108px;
+  animation: mascot-bob 3s ease-in-out infinite;
+}
+
+.mascot-hero--idle {
+  animation: mascot-glance 8s ease-in-out infinite;
+}
+
+.mascot-roam {
+  position: absolute;
+  right: 6px;
+  z-index: 4;
+  pointer-events: none;
+  transition: top 1.8s ease-in-out;
+}
+
+.mascot--roam {
+  width: 40px;
+  height: 40px;
+  animation: mascot-bob-flip 2.6s ease-in-out infinite;
+}
+
+.mascot-roam--shocked .mascot--roam {
+  animation: mascot-bob-flip 2.6s ease-in-out infinite;
+}
+
+.mascot-roam.is-startled .mascot--roam,
+.mascot-hero.is-startled .mascot--hero {
+  animation: mascot-jitter-flip 0.28s linear 4;
+}
+
+.mascot-roam--confused .mascot--roam {
+  animation: mascot-sway-flip 3.1s ease-in-out infinite;
+}
+
+@keyframes mascot-bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+@keyframes mascot-glance {
+  0%,
+  42% {
+    transform: scaleX(1);
+  }
+  50%,
+  92% {
+    transform: scaleX(-1);
+  }
+  100% {
+    transform: scaleX(1);
+  }
+}
+
+@keyframes mascot-bob-flip {
+  0%,
+  100% {
+    transform: scaleX(-1) translateY(0);
+  }
+  50% {
+    transform: scaleX(-1) translateY(-3px);
+  }
+}
+
+@keyframes mascot-sway-flip {
+  0%,
+  100% {
+    transform: scaleX(-1) translate(0, 0) rotate(6deg);
+  }
+  50% {
+    transform: scaleX(-1) translate(-3px, -3px) rotate(-5deg);
+  }
+}
+
+@keyframes mascot-jitter-flip {
+  0%,
+  100% {
+    transform: scaleX(-1) translate(0, 0);
+  }
+  25% {
+    transform: scaleX(-1) translate(-2px, 1px);
+  }
+  75% {
+    transform: scaleX(-1) translate(2px, -1px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mascot-hero,
+  .mascot-hero--idle,
+  .mascot--hero,
+  .mascot-roam,
+  .mascot--roam {
+    animation: none;
+    transition: none;
+  }
 }
 
 .terminal-title {
@@ -321,6 +455,14 @@ button:focus-visible {
 /* ─────────────────────────────────────────────
    Console / request list
 ───────────────────────────────────────────── */
+.console-shell {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  z-index: 1;
+  overflow: hidden;
+}
+
 .console-output {
   background: rgba(0, 0, 0, 0.5);
   border: 1px solid #222;
@@ -328,13 +470,15 @@ button:focus-visible {
   padding: 12px;
   flex: 1;
   min-height: 0;
+  height: 100%;
   overflow-y: auto;
   font-size: 12px;
   line-height: 1.5;
   scrollbar-width: thin;
   scrollbar-color: var(--terminal-green-dim) transparent;
   position: relative;
-  z-index: 1;
+  display: flex;
+  flex-direction: column;
 }
 
 .console-output::-webkit-scrollbar {
@@ -346,7 +490,9 @@ button:focus-visible {
   border-radius: 3px;
 }
 
-.log-entry {
+.console-shell:has(.mascot-roam) .log-entry:not(.system) {
+  padding-right: 42px;
+}
   margin-bottom: 8px;
   word-break: break-all;
   background: rgba(0, 0, 0, 0.3);
@@ -355,6 +501,7 @@ button:focus-visible {
   padding: 12px;
   animation: panel-in 0.2s ease;
   color: var(--terminal-green);
+  flex-shrink: 0;
 }
 
 .log-entry.flagged {
@@ -371,6 +518,18 @@ button:focus-visible {
   border: 0;
   background: transparent;
   padding: 24px 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  justify-content: center;
+  flex: 1;
+}
+
+.empty-cmd {
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 @keyframes panel-in {
@@ -576,6 +735,8 @@ button:focus-visible {
   display: block;
   color: #888;
   max-width: 36ch;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 /* ─────────────────────────────────────────────
@@ -619,6 +780,17 @@ button:focus-visible {
   flex-shrink: 0;
   position: relative;
   z-index: 1;
+}
+
+.footer-link {
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  color: var(--terminal-blue);
+  font-family: var(--terminal-font);
+  font-size: 10px;
+  letter-spacing: 1px;
 }
 
 .footer-live {
